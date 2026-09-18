@@ -1,0 +1,40 @@
+# Environment variables
+.env
+.env.local
+
+# GCP Credentials
+*.json
+!requirements.txt
+credentials/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+venv/
+env/
+.venv/
+
+# Datasets (local cache)
+datasets/
+*.csv
+*.zip
+*.tar.gz
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp

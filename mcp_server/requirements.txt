@@ -1,0 +1,13 @@
+fastapi>=0.100.0
+uvicorn
+httpx
+supabase
+google-generativeai
+google-cloud-storage
+python-dotenv
+pydantic>=2.0.0
+pydantic-settings
+torch>=2.0.0
+torchvision>=0.15.0
+pillow>=10.0.0
+python-multipart
