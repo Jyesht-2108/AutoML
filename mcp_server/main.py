@@ -869,6 +869,217 @@ async def get_all_logs(user_id: str, limit: int = 100):
         logger.error(f"Error testing model: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# ============= Custom Dataset Upload Endpoint =============
+
+@app.post("/api/ml/upload-dataset")
+async def upload_custom_dataset(
+    dataset: UploadFile = File(...),
+    user_id: str = Form(...),
+    project_name: str = Form(...),
+    task_type: str = Form("image_classification"),
+    preferred_model: str = Form("resnet18"),
+    description: str = Form(""),
+    user_name: str = Form(""),
+    user_email: str = Form("")
+):
+    """
+    Upload a custom dataset ZIP file for quick training.
+    
+    Flow: Upload ZIP → Create project → Upload to GCS → Update DB → Training Agent auto-picks it up
+    
+    The ZIP should contain train/ and val/ directories with class subdirectories.
+    """
+    logger.info(f"Custom dataset upload from user {user_id}: {dataset.filename} ({project_name})")
+    
+    try:
+        from supabase_client import get_supabase_client
+        from google.cloud import storage
+        from datetime import datetime, timezone
+        import tempfile
+        import zipfile
+        
+        supabase = get_supabase_client()
+        
+        # 1. Validate file
+        if not dataset.filename:
+            raise HTTPException(status_code=400, detail="No file uploaded")
+        
+        filename_lower = dataset.filename.lower()
+        if not (filename_lower.endswith('.zip') or filename_lower.endswith('.tar.gz') or filename_lower.endswith('.rar')):
+            raise HTTPException(status_code=400, detail="Only .zip, .tar.gz, and .rar files are supported")
+        
+        # 2. Get or create user
+        user_uuid = get_user_uuid_from_firebase_uid(user_id)
+        logger.info(f"User UUID: {user_uuid}")
+        
+        # 3. Create project in database
+        project_data = {
+            "user_id": user_uuid,
+            "name": project_name,
+            "description": description or f"Custom dataset upload: {dataset.filename}",
+            "task_type": task_type,
+            "framework": "pytorch",
+            "dataset_source": "custom_upload",
+            "search_keywords": [project_name.lower().replace(" ", "_")],
+            "status": "pending_dataset",
+            "metadata": {
+                "preferred_model": preferred_model,
+                "target_metric": "accuracy",
+                "target_value": 0.9,
+                "upload_filename": dataset.filename,
+                "source": "custom_upload"
+            },
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        project_result = supabase.table("projects").insert(project_data).execute()
+        if not project_result.data:
+            raise HTTPException(status_code=500, detail="Failed to create project in database")
+        
+        project_id = project_result.data[0]["id"]
+        logger.info(f"Created project {project_id}")
+        
+        # Log to agent_logs
+        supabase.table("agent_logs").insert({
+            "project_id": project_id,
+            "agent_name": "dataset",
+            "message": f"Custom dataset upload started: {dataset.filename}",
+            "log_level": "info",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }).execute()
+        
+        # 4. Save uploaded file to temp and upload to GCS
+        file_content = await dataset.read()
+        file_size_bytes = len(file_content)
+        file_size_mb = file_size_bytes / (1024 * 1024)
+        
+        logger.info(f"Dataset file size: {file_size_mb:.1f}MB")
+        
+        # Validate size (500MB max)
+        if file_size_mb > 500:
+            # Clean up the project we just created
+            supabase.table("projects").delete().eq("id", project_id).execute()
+            raise HTTPException(status_code=400, detail=f"File too large ({file_size_mb:.1f}MB). Maximum is 500MB.")
+        
+        # Try to extract class labels from ZIP
+        class_labels = None
+        if filename_lower.endswith('.zip'):
+            try:
+                import io
+                with zipfile.ZipFile(io.BytesIO(file_content), 'r') as z:
+                    paths = z.namelist()
+                    
+                    # Find train directory
+                    train_prefix = None
+                    for p in paths:
+                        if '/train/' in p.lower() or p.lower().startswith('train/'):
+                            train_prefix = p[:p.lower().find('train/') + 6]
+                            break
+                    
+                    if train_prefix:
+                        classes = set()
+                        for p in paths:
+                            if p.startswith(train_prefix) and p != train_prefix:
+                                rel_path = p[len(train_prefix):]
+                                if '/' in rel_path:
+                                    cls_name = rel_path.split('/')[0]
+                                    if cls_name and not cls_name.startswith('.'):
+                                        classes.add(cls_name)
+                        
+                        if classes:
+                            class_labels = sorted(list(classes))
+                            logger.info(f"Extracted {len(class_labels)} classes from ZIP: {class_labels}")
+            except Exception as e:
+                logger.warning(f"Could not extract class labels from ZIP: {e}")
+        
+        # Upload to GCS
+        gcp_credentials_path = settings.GOOGLE_APPLICATION_CREDENTIALS
+        if not gcp_credentials_path or not os.path.exists(gcp_credentials_path):
+            # Clean up
+            supabase.table("projects").delete().eq("id", project_id).execute()
+            raise HTTPException(status_code=500, detail="GCP credentials not configured")
+        
+        storage_client = storage.Client.from_service_account_json(gcp_credentials_path)
+        bucket_name = settings.GCP_BUCKET_NAME
+        bucket = storage_client.bucket(bucket_name)
+        
+        # Upload to raw/custom_uploads/<project_id>/<filename>
+        safe_filename = dataset.filename.replace(" ", "_")
+        gcs_destination = f"raw/custom_uploads/{project_id}/{safe_filename}"
+        
+        blob = bucket.blob(gcs_destination)
+        blob.upload_from_string(file_content, timeout=300)
+        
+        gcs_url = f"gs://{bucket_name}/{gcs_destination}"
+        logger.info(f"Uploaded to GCS: {gcs_url}")
+        
+        supabase.table("agent_logs").insert({
+            "project_id": project_id,
+            "agent_name": "dataset",
+            "message": f"Dataset uploaded to GCS: {gcs_url} ({file_size_mb:.1f}MB)",
+            "log_level": "info",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }).execute()
+        
+        # 5. Create dataset record
+        dataset_record = {
+            "project_id": project_id,
+            "name": dataset.filename,
+            "gcs_url": gcs_url,
+            "size": f"{file_size_mb:.2f} MB" if file_size_mb < 1024 else f"{file_size_mb / 1024:.2f} GB",
+            "source": "custom_upload",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        supabase.table("datasets").insert(dataset_record).execute()
+        logger.info(f"Dataset record created for project {project_id}")
+        
+        # 6. Update project metadata with class labels and set status to pending_training
+        update_metadata = project_data["metadata"].copy()
+        if class_labels:
+            update_metadata["class_labels"] = class_labels
+            update_metadata["num_classes"] = len(class_labels)
+        
+        supabase.table("projects").update({
+            "status": "pending_training",
+            "metadata": update_metadata,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }).eq("id", project_id).execute()
+        
+        logger.info(f"Project {project_id} status set to pending_training")
+        
+        supabase.table("agent_logs").insert({
+            "project_id": project_id,
+            "agent_name": "dataset",
+            "message": f"Custom dataset processed successfully. Status → pending_training. Classes: {class_labels or 'auto-detect during training'}",
+            "log_level": "info",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }).execute()
+        
+        # 7. Return success
+        return {
+            "success": True,
+            "projectId": project_id,
+            "message": f"Dataset '{dataset.filename}' uploaded successfully! Project '{project_name}' created and queued for training.",
+            "dataset": {
+                "filename": dataset.filename,
+                "size_mb": round(file_size_mb, 1),
+                "gcs_url": gcs_url,
+                "class_labels": class_labels
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading custom dataset: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
+

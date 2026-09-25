@@ -9,12 +9,14 @@ import {
   Cpu,
   Image as ImageIcon,
   BoxArrowRight,
-  ShieldLock
+  ShieldLock,
+  CloudUpload
 } from 'react-bootstrap-icons';
 import ChatBot from '../components/ChatBot';
 import MLProjectsPage from './MLProjectsPage';
 import ModelTester from '../components/ModelTester';
 import AdminDashboard from './AdminDashboard';
+import DatasetUploader from '../components/DatasetUploader';
 
 const Dashboard = ({ user }) => {
   const [showProfile, setShowProfile] = useState(false);
@@ -330,7 +332,7 @@ const Dashboard = ({ user }) => {
 
                       <motion.div variants={itemVariants}>
                         <Row className="g-4 justify-content-center">
-                          <Col xs={12} sm={6} lg={4}>
+                          <Col xs={12} sm={6} lg={3}>
                             <Card 
                               className="border-0 h-100"
                               style={{
@@ -350,7 +352,7 @@ const Dashboard = ({ user }) => {
                             </Card>
                           </Col>
 
-                          <Col xs={12} sm={6} lg={4}>
+                          <Col xs={12} sm={6} lg={3}>
                             <Card 
                               className="border-0 h-100"
                               style={{
@@ -370,7 +372,7 @@ const Dashboard = ({ user }) => {
                             </Card>
                           </Col>
 
-                          <Col xs={12} sm={6} lg={4}>
+                          <Col xs={12} sm={6} lg={3}>
                             <Card 
                               className="border-0 h-100"
                               style={{
@@ -385,6 +387,26 @@ const Dashboard = ({ user }) => {
                                 <h5 className="fw-bold mb-2">AI Assistant</h5>
                                 <p style={{ opacity: 0.9, fontSize: '0.9em' }}>
                                   Chat with your personal AI assistant
+                                </p>
+                              </Card.Body>
+                            </Card>
+                          </Col>
+
+                          <Col xs={12} sm={6} lg={3}>
+                            <Card 
+                              className="border-0 h-100"
+                              style={{
+                                background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
+                                borderRadius: '16px',
+                                cursor: 'pointer'
+                              }}
+                              onClick={() => setActiveTab('upload-dataset')}
+                            >
+                              <Card.Body className="p-4 text-white">
+                                <CloudUpload size={40} className="mb-3" />
+                                <h5 className="fw-bold mb-2">Upload Dataset</h5>
+                                <p style={{ opacity: 0.9, fontSize: '0.9em' }}>
+                                  Upload custom datasets for fast testing
                                 </p>
                               </Card.Body>
                             </Card>
@@ -424,6 +446,25 @@ const Dashboard = ({ user }) => {
                 transition={{ duration: 0.3 }}
               >
                 <ModelTester isAdmin={isAdmin} />
+              </motion.div>
+            </Tab>
+
+            <Tab 
+              eventKey="upload-dataset" 
+              title={
+                <span className="d-flex align-items-center gap-2">
+                  <CloudUpload size={18} />
+                  <span>Upload Dataset</span>
+                </span>
+              }
+            >
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.3 }}
+                className="py-3"
+              >
+                <DatasetUploader user={user} onProjectCreated={() => setActiveTab('ml-projects')} />
               </motion.div>
             </Tab>
 

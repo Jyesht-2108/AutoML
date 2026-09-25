@@ -251,4 +251,70 @@ router.post('/ml/projects/:projectId/test', verifySession, upload.single('image'
   }
 });
 
+// Upload custom dataset for quick training
+const datasetUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 500 * 1024 * 1024 } // 500MB limit
+});
+
+router.post('/ml/upload-dataset', verifySession, datasetUpload.single('dataset'), async (req, res) => {
+  try {
+    const firebaseUid = req.user.uid;
+    const userName = req.user.name || req.user.email;
+    const userEmail = req.user.email;
+
+    console.log(`Dataset upload request from user ${firebaseUid}`);
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'No dataset file uploaded' });
+    }
+
+    const { project_name, task_type, preferred_model, description } = req.body;
+
+    if (!project_name || !project_name.trim()) {
+      return res.status(400).json({ error: 'Project name is required' });
+    }
+
+    console.log(`Uploading dataset: ${req.file.originalname} (${(req.file.size / (1024 * 1024)).toFixed(1)}MB)`);
+
+    // Forward to MCP server
+    const FormData = require('form-data');
+    const formData = new FormData();
+
+    formData.append('dataset', req.file.buffer, {
+      filename: req.file.originalname,
+      contentType: req.file.mimetype
+    });
+    formData.append('user_id', firebaseUid);
+    formData.append('project_name', project_name.trim());
+    formData.append('task_type', task_type || 'image_classification');
+    formData.append('preferred_model', preferred_model || 'resnet18');
+    formData.append('description', description || '');
+    formData.append('user_name', userName || '');
+    formData.append('user_email', userEmail || '');
+
+    const mcpResponse = await axios.post(
+      `${MCP_SERVER_URL}/api/ml/upload-dataset`,
+      formData,
+      {
+        headers: {
+          ...formData.getHeaders()
+        },
+        maxContentLength: 600 * 1024 * 1024,
+        maxBodyLength: 600 * 1024 * 1024,
+        timeout: 300000 // 5 minute timeout
+      }
+    );
+
+    console.log(`Dataset upload successful for project: ${mcpResponse.data.projectId}`);
+    res.json(mcpResponse.data);
+  } catch (error) {
+    console.error('Error uploading dataset:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to upload dataset',
+      details: error.response?.data?.detail || error.message
+    });
+  }
+});
+
 module.exports = router;

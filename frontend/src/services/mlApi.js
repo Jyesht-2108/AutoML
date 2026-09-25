@@ -43,4 +43,15 @@ export const testModel = (projectId, imageFile) => {
   });
 };
 
+// Upload custom dataset for quick training
+export const uploadCustomDataset = (formData, onUploadProgress) => {
+  return mlApi.post('/api/ml/upload-dataset', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    },
+    onUploadProgress,
+    timeout: 300000 // 5 minute timeout for large uploads
+  });
+};
+
 export default mlApi;
