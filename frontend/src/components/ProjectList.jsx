@@ -43,7 +43,7 @@ const ProjectList = ({ refreshTrigger, onViewDetails, onDownload }) => {
     const interval = setInterval(() => {
       // Check if any project is in progress
       const hasActiveProjects = projects.some(p => 
-        ['pending_dataset', 'pending_training', 'pending_evaluation'].includes(p.status)
+        ['pending_dataset', 'pending_sanity', 'pending_training', 'pending_evaluation'].includes(p.status)
       );
       
       // Only auto-refresh if there are active projects

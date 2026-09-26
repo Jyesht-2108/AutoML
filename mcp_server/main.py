@@ -745,7 +745,7 @@ async def get_admin_stats(user_id: str):
         
         # Get status breakdown
         status_breakdown = {}
-        statuses = ["draft", "pending_dataset", "pending_training", "pending_evaluation", "completed", "failed"]
+        statuses = ["draft", "pending_dataset", "pending_sanity", "pending_training", "pending_evaluation", "completed", "failed"]
         for status in statuses:
             count = supabase.table("projects").select("id", count="exact").eq("status", status).execute()
             status_breakdown[status] = count.count

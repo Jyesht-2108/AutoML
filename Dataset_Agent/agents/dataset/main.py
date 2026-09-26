@@ -404,14 +404,14 @@ async def start_dataset_job(job: DatasetJobRequest):
             raise
         
         # Update project status - this is critical, retry if needed
-        print(f"📝 Updating project status to pending_training...")
+        print(f"📝 Updating project status to pending_sanity...")
         status_updated = False
         max_retries = 3
         
         for attempt in range(max_retries):
             try:
                 update_result = supabase.table("projects").update({
-                    "status": "pending_training",
+                    "status": "pending_sanity",
                     "updated_at": datetime.now(UTC).isoformat()
                 }).eq("id", project_id).execute()
                 print(f"✅ Project status updated successfully (attempt {attempt + 1})")
@@ -436,7 +436,7 @@ async def start_dataset_job(job: DatasetJobRequest):
         if not status_updated:
             # Dataset is uploaded but status wasn't updated - this is not a complete failure
             print(f"⚠️ Dataset uploaded successfully but status remains 'pending_dataset'")
-            print(f"   Manual intervention may be needed to update status to 'pending_training'")
+            print(f"   Manual intervention may be needed to update status to 'pending_sanity'")
             # Don't raise exception - the dataset work is done
         
         log_to_supabase(project_id, "Dataset agent completed successfully", "info")
@@ -445,7 +445,7 @@ async def start_dataset_job(job: DatasetJobRequest):
             f"✅ Dataset uploaded successfully!\n"
             f"Dataset: {dataset_ref}\n"
             f"Size: {file_size_gb:.2f} GB\n"
-            f"Training Agent can now begin.")
+            f"Data Sanity Auditor will now inspect the dataset...")
         
         # Clean up Kaggle credentials after use for security
         kaggle_json_path = os.path.expanduser("~/.kaggle/kaggle.json")
@@ -674,14 +674,14 @@ def process_project_sync(project_id: str):
             raise
         
         # Update project status - retry logic for robustness
-        print(f"[AUTO] 📝 Updating project status to pending_training...")
+        print(f"[AUTO] 📝 Updating project status to pending_sanity...")
         status_updated = False
         max_retries = 3
         
         for attempt in range(max_retries):
             try:
                 update_result = supabase.table("projects").update({
-                    "status": "pending_training",
+                    "status": "pending_sanity",
                     "updated_at": datetime.now(UTC).isoformat()
                 }).eq("id", project_id).execute()
                 print(f"[AUTO] ✅ Status updated successfully (attempt {attempt + 1}): {update_result.data}")
@@ -717,7 +717,7 @@ def process_project_sync(project_id: str):
             f"✅ Dataset auto-uploaded successfully!\n"
             f"Dataset: {dataset_ref}\n"
             f"Size: {file_size_gb:.2f} GB\n"
-            f"Training Agent can now begin.")
+            f"Data Sanity Auditor will now inspect the dataset...")
         
         print(f"[AUTO] ✅ Project {project_id} completed successfully")
         

@@ -23,13 +23,19 @@ const ProjectCard = ({ project, onViewDetails, onDownload }) => {
         color: 'info', 
         icon: <HourglassSplit size={16} />, 
         text: 'Fetching Dataset',
-        progress: 25
+        progress: 20
+      },
+      'pending_sanity': { 
+        color: 'info', 
+        icon: <HourglassSplit size={16} />, 
+        text: 'Sanity Check',
+        progress: 35
       },
       'pending_training': { 
         color: 'warning', 
         icon: <HourglassSplit size={16} />, 
         text: 'Training Model',
-        progress: 50
+        progress: 55
       },
       'pending_evaluation': { 
         color: 'primary', 

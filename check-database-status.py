@@ -25,6 +25,7 @@ for p in projects.data:
     status_emoji = {
         'draft': '📝',
         'pending_dataset': '⏳',
+        'pending_sanity': '🔬',
         'pending_training': '🔄',
         'pending_evaluation': '📊',
         'completed': '✅',

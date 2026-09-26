@@ -11,7 +11,8 @@ import {
   Activity,
   Database,
   Cpu,
-  BarChart
+  BarChart,
+  ShieldCheck
 } from 'react-bootstrap-icons';
 
 const MLProjectsPage = ({ user }) => {
@@ -48,10 +49,11 @@ const MLProjectsPage = ({ user }) => {
     const stages = {
       'draft': { active: 'planner', completed: [] },
       'pending_dataset': { active: 'dataset', completed: ['planner'] },
-      'pending_training': { active: 'training', completed: ['planner', 'dataset'] },
-      'pending_evaluation': { active: 'evaluation', completed: ['planner', 'dataset', 'training'] },
-      'completed': { active: null, completed: ['planner', 'dataset', 'training', 'evaluation'] },
-      'export_ready': { active: null, completed: ['planner', 'dataset', 'training', 'evaluation'] }
+      'pending_sanity': { active: 'sanity', completed: ['planner', 'dataset'] },
+      'pending_training': { active: 'training', completed: ['planner', 'dataset', 'sanity'] },
+      'pending_evaluation': { active: 'evaluation', completed: ['planner', 'dataset', 'sanity', 'training'] },
+      'completed': { active: null, completed: ['planner', 'dataset', 'sanity', 'training', 'evaluation'] },
+      'export_ready': { active: null, completed: ['planner', 'dataset', 'sanity', 'training', 'evaluation'] }
     };
     return stages[status] || stages['draft'];
   };
@@ -61,6 +63,7 @@ const MLProjectsPage = ({ user }) => {
     const agents = [
       { name: 'Planner', icon: <Activity size={20} />, key: 'planner' },
       { name: 'Dataset', icon: <Database size={20} />, key: 'dataset' },
+      { name: 'Sanity', icon: <ShieldCheck size={20} />, key: 'sanity' },
       { name: 'Training', icon: <Cpu size={20} />, key: 'training' },
       { name: 'Evaluation', icon: <BarChart size={20} />, key: 'evaluation' }
     ];
