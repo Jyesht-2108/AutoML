@@ -574,6 +574,314 @@ def repackage_and_upload(extract_dir: str, original_gcs_url: str, project_id: st
 
 
 # ---------------------------------------------------------------------------
+# Tabular & Text Audit Functions
+# ---------------------------------------------------------------------------
+
+TABULAR_EXTENSIONS = {".csv", ".tsv", ".parquet", ".xlsx", ".xls"}
+TEXT_EXTENSIONS = {".csv", ".tsv", ".jsonl", ".json", ".txt"}
+
+
+def _find_files_by_ext(root_dir: str, extensions: set) -> list:
+    """Recursively find files matching given extensions."""
+    found = []
+    for dirpath, _, filenames in os.walk(root_dir):
+        for f in filenames:
+            if Path(f).suffix.lower() in extensions:
+                found.append(os.path.join(dirpath, f))
+    return found
+
+
+def run_tabular_audit(extract_dir: str) -> dict:
+    """
+    Audit a tabular (CSV/Parquet) dataset for data quality issues.
+    Checks: missing values, duplicate rows, single-value columns, high cardinality, data types.
+    """
+    import csv
+
+    csv_files = _find_files_by_ext(extract_dir, TABULAR_EXTENSIONS)
+    if not csv_files:
+        return {
+            "passed": False,
+            "errors": ["No CSV/Parquet files found in the dataset."],
+            "warnings": [],
+            "proposed_actions": {},
+            "total_rows": 0,
+            "total_columns": 0,
+        }
+
+    # Use the first/largest CSV file as the primary dataset
+    primary_file = max(csv_files, key=os.path.getsize)
+    filename = os.path.basename(primary_file)
+
+    # Read with csv module (no pandas dependency required)
+    rows = []
+    headers = []
+    try:
+        with open(primary_file, "r", encoding="utf-8", errors="replace") as f:
+            reader = csv.DictReader(f)
+            headers = reader.fieldnames or []
+            for i, row in enumerate(reader):
+                rows.append(row)
+                if i >= 50000:  # Cap at 50k rows for audit speed
+                    break
+    except Exception as e:
+        return {
+            "passed": False,
+            "errors": [f"Failed to read CSV file '{filename}': {str(e)}"],
+            "warnings": [],
+            "proposed_actions": {},
+            "total_rows": 0,
+            "total_columns": 0,
+        }
+
+    total_rows = len(rows)
+    total_cols = len(headers)
+
+    if total_rows == 0 or total_cols == 0:
+        return {
+            "passed": False,
+            "errors": ["Dataset is empty (0 rows or 0 columns)."],
+            "warnings": [],
+            "proposed_actions": {},
+            "total_rows": total_rows,
+            "total_columns": total_cols,
+        }
+
+    warnings = []
+    errors = []
+    proposed_actions = {}
+
+    # 1. Check missing values per column
+    missing_counts = {}
+    for col in headers:
+        missing = sum(1 for r in rows if not r.get(col) or r[col].strip() == "")
+        if missing > 0:
+            missing_counts[col] = missing
+
+    total_missing = sum(missing_counts.values())
+    missing_percent = (total_missing / (total_rows * total_cols)) * 100 if (total_rows * total_cols) > 0 else 0
+
+    if missing_counts:
+        high_missing_cols = {c: cnt for c, cnt in missing_counts.items() if cnt / total_rows > 0.5}
+        if high_missing_cols:
+            warnings.append(f"{len(high_missing_cols)} column(s) have >50% missing values: {list(high_missing_cols.keys())}")
+        proposed_actions["handle_missing"] = {
+            "description": f"Handle {total_missing} missing values across {len(missing_counts)} column(s) ({missing_percent:.1f}% of data)",
+            "columns": {c: cnt for c, cnt in missing_counts.items()},
+            "recommended": True,
+        }
+
+    # 2. Check duplicate rows
+    row_strings = ["|".join(r.get(h, "") for h in headers) for r in rows]
+    unique_rows = len(set(row_strings))
+    duplicate_count = total_rows - unique_rows
+    if duplicate_count > 0:
+        dup_percent = (duplicate_count / total_rows) * 100
+        warnings.append(f"{duplicate_count} duplicate rows found ({dup_percent:.1f}%)")
+        proposed_actions["remove_duplicates"] = {
+            "description": f"Remove {duplicate_count} duplicate rows ({dup_percent:.1f}%)",
+            "count": duplicate_count,
+            "recommended": True,
+        }
+
+    # 3. Check single-value (constant) columns
+    constant_cols = []
+    for col in headers:
+        unique_vals = set(r.get(col, "") for r in rows)
+        if len(unique_vals) <= 1:
+            constant_cols.append(col)
+    if constant_cols:
+        warnings.append(f"{len(constant_cols)} constant column(s) found: {constant_cols}")
+        proposed_actions["drop_constant_columns"] = {
+            "description": f"Drop {len(constant_cols)} constant column(s) that provide no information",
+            "columns": constant_cols,
+            "recommended": True,
+        }
+
+    # 4. Check for extremely high cardinality columns (likely IDs)
+    high_card_cols = []
+    for col in headers:
+        unique_vals = set(r.get(col, "") for r in rows)
+        if len(unique_vals) > total_rows * 0.95 and total_rows > 20:
+            high_card_cols.append(col)
+    if high_card_cols:
+        warnings.append(f"{len(high_card_cols)} column(s) have very high cardinality (likely ID columns): {high_card_cols}")
+
+    # 5. Determine if classification or regression target exists
+    # (check last column or common target names)
+    target_candidates = ["target", "label", "class", "y", "output", "price", "salary"]
+    detected_target = None
+    for col in headers:
+        if col.lower() in target_candidates:
+            detected_target = col
+            break
+    if not detected_target:
+        detected_target = headers[-1]  # default to last column
+
+    target_unique = len(set(r.get(detected_target, "") for r in rows))
+
+    passed = len(errors) == 0 and total_rows >= 10
+
+    if total_rows < 10:
+        errors.append(f"Dataset too small: only {total_rows} rows (minimum 10 required)")
+        passed = False
+
+    return {
+        "passed": passed,
+        "data_type": "tabular",
+        "primary_file": filename,
+        "total_rows": total_rows,
+        "total_columns": total_cols,
+        "columns": headers,
+        "detected_target": detected_target,
+        "target_unique_values": target_unique,
+        "missing_values": missing_counts,
+        "missing_percent": round(missing_percent, 2),
+        "duplicate_count": duplicate_count,
+        "constant_columns": constant_cols,
+        "high_cardinality_columns": high_card_cols,
+        "warnings": warnings,
+        "errors": errors,
+        "proposed_actions": proposed_actions,
+    }
+
+
+def run_text_audit(extract_dir: str) -> dict:
+    """
+    Audit a text dataset (CSV with text column) for quality issues.
+    Checks: empty texts, encoding errors, sequence length distribution.
+    """
+    import csv
+
+    csv_files = _find_files_by_ext(extract_dir, TEXT_EXTENSIONS)
+    if not csv_files:
+        return {
+            "passed": False,
+            "errors": ["No CSV/JSONL/TXT files found in the dataset."],
+            "warnings": [],
+            "proposed_actions": {},
+            "total_rows": 0,
+        }
+
+    primary_file = max(csv_files, key=os.path.getsize)
+    filename = os.path.basename(primary_file)
+
+    rows = []
+    headers = []
+    try:
+        with open(primary_file, "r", encoding="utf-8", errors="replace") as f:
+            reader = csv.DictReader(f)
+            headers = reader.fieldnames or []
+            for i, row in enumerate(reader):
+                rows.append(row)
+                if i >= 50000:
+                    break
+    except Exception as e:
+        return {
+            "passed": False,
+            "errors": [f"Failed to read file '{filename}': {str(e)}"],
+            "warnings": [],
+            "proposed_actions": {},
+            "total_rows": 0,
+        }
+
+    total_rows = len(rows)
+    if total_rows == 0:
+        return {
+            "passed": False,
+            "errors": ["Dataset is empty."],
+            "warnings": [],
+            "proposed_actions": {},
+            "total_rows": 0,
+        }
+
+    # Detect text column (longest average string length)
+    text_col = None
+    label_col = None
+    text_candidates = ["text", "sentence", "review", "comment", "content", "body", "message", "tweet"]
+    label_candidates = ["label", "sentiment", "class", "target", "category"]
+
+    for col in headers:
+        if col.lower() in text_candidates:
+            text_col = col
+        if col.lower() in label_candidates:
+            label_col = col
+
+    if not text_col:
+        # Fallback: pick column with longest avg text
+        avg_lengths = {}
+        for col in headers:
+            lengths = [len(r.get(col, "")) for r in rows[:100]]
+            avg_lengths[col] = sum(lengths) / len(lengths) if lengths else 0
+        text_col = max(avg_lengths, key=avg_lengths.get) if avg_lengths else headers[0]
+
+    if not label_col and len(headers) > 1:
+        label_col = [h for h in headers if h != text_col][0]
+
+    warnings = []
+    errors = []
+    proposed_actions = {}
+
+    # Check empty texts
+    empty_count = sum(1 for r in rows if not r.get(text_col, "").strip())
+    if empty_count > 0:
+        pct = (empty_count / total_rows) * 100
+        warnings.append(f"{empty_count} empty text entries ({pct:.1f}%)")
+        proposed_actions["remove_empty_texts"] = {
+            "description": f"Remove {empty_count} empty text entries ({pct:.1f}%)",
+            "count": empty_count,
+            "recommended": True,
+        }
+
+    # Check sequence lengths
+    lengths = [len(r.get(text_col, "").split()) for r in rows if r.get(text_col, "").strip()]
+    avg_len = sum(lengths) / len(lengths) if lengths else 0
+    max_len = max(lengths) if lengths else 0
+    min_len = min(lengths) if lengths else 0
+
+    if max_len > 1000:
+        warnings.append(f"Some texts are very long ({max_len} words). May need truncation.")
+
+    # Check label distribution
+    label_dist = {}
+    if label_col:
+        from collections import Counter as Ctr
+        label_dist = dict(Ctr(r.get(label_col, "unknown") for r in rows))
+        num_labels = len(label_dist)
+        if num_labels < 2:
+            errors.append(f"Only {num_labels} label class(es) found. Need at least 2.")
+        if num_labels > 0:
+            max_label_count = max(label_dist.values())
+            min_label_count = min(label_dist.values())
+            if max_label_count > min_label_count * 10 and min_label_count > 0:
+                warnings.append(f"Severe label imbalance: ratio {max_label_count / min_label_count:.1f}:1")
+
+    passed = len(errors) == 0 and total_rows >= 10
+
+    if total_rows < 10:
+        errors.append(f"Dataset too small: only {total_rows} rows")
+        passed = False
+
+    return {
+        "passed": passed,
+        "data_type": "text",
+        "primary_file": filename,
+        "total_rows": total_rows,
+        "total_columns": len(headers),
+        "text_column": text_col,
+        "label_column": label_col,
+        "label_distribution": label_dist,
+        "empty_text_count": empty_count,
+        "avg_word_length": round(avg_len, 1),
+        "max_word_length": max_len,
+        "min_word_length": min_len,
+        "warnings": warnings,
+        "errors": errors,
+        "proposed_actions": proposed_actions,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Orchestration
 # ---------------------------------------------------------------------------
 
@@ -589,6 +897,10 @@ def process_audit(project_id: str):
             return
         project = project_resp.data[0]
         user_id = project["user_id"]
+
+        # Determine task type for routing
+        task_type = project.get("task_type", "image_classification")
+        log_to_supabase(project_id, f"Task type detected: {task_type}", "info")
 
         send_chat_message(user_id, "🔬 Data Sanity Auditor is inspecting your dataset...")
 
@@ -630,7 +942,14 @@ def process_audit(project_id: str):
                 return
 
             log_to_supabase(project_id, "Running sanity checks...", "info")
-            report = run_audit(extract_dir)
+
+            # Route to the correct audit function based on task_type
+            if task_type in ("tabular_classification", "tabular_regression"):
+                report = run_tabular_audit(extract_dir)
+            elif task_type == "text_classification":
+                report = run_text_audit(extract_dir)
+            else:
+                report = run_audit(extract_dir)
 
         # Store report in project metadata
         metadata = project.get("metadata", {}) or {}

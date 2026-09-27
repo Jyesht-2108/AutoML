@@ -47,12 +47,12 @@ class PlannerInput(BaseModel):
 class ProjectPlan(BaseModel):
     """Validated project plan schema"""
     name: str = Field(..., description="Project name")
-    task_type: str = Field(default="image_classification", description="ML task type")
-    framework: str = Field(default="pytorch", description="ML framework")
+    task_type: str = Field(default="image_classification", description="ML task type: image_classification, tabular_classification, tabular_regression, text_classification")
+    framework: str = Field(default="pytorch", description="ML framework: pytorch or scikit-learn")
     dataset_source: str = Field(default="kaggle", description="Dataset source")
     search_keywords: List[str] = Field(..., description="Keywords for dataset search")
     preferred_model: str = Field(default="resnet18", description="Preferred model architecture")
-    target_metric: str = Field(default="accuracy", description="Target evaluation metric")
+    target_metric: str = Field(default="accuracy", description="Target evaluation metric: accuracy or rmse")
     target_value: float = Field(default=0.9, description="Target metric value")
     max_dataset_size_gb: float = Field(default=50, description="Maximum dataset size in GB")
 
@@ -103,57 +103,81 @@ def log_to_supabase(project_id: Optional[str], agent_name: str, message: str, lo
 
 
 def build_gemini_prompt(user_message: str) -> str:
-    """Build structured prompt for Gemini LLM"""
-    prompt = f"""You are a Planner Agent for an AutoML system. Convert the following user request into a structured JSON object.
+    """Build structured prompt for Gemini LLM — supports image, tabular, and text tasks"""
+    prompt = f"""You are a Planner Agent for an AutoML system that supports three data modalities: IMAGE, TABULAR, and TEXT. Convert the following user request into a structured JSON object.
 
 User Request: "{user_message}"
 
 You must respond with ONLY a valid JSON object (no markdown, no explanation) conforming to this exact schema:
 {{
   "name": "string - A descriptive project name based on the user's request",
-  "task_type": "image_classification",
-  "framework": "pytorch",
+  "task_type": "string - one of: image_classification, tabular_classification, tabular_regression, text_classification",
+  "framework": "string - pytorch for image/text, scikit-learn for tabular",
   "dataset_source": "kaggle",
   "search_keywords": ["array of relevant keywords for finding datasets on Kaggle"],
-  "preferred_model": "string - suggest resnet18, resnet50, or efficientnet based on task",
-  "target_metric": "accuracy",
+  "preferred_model": "string - model architecture (see rules below)",
+  "target_metric": "string - accuracy for classification, rmse for regression",
   "target_value": 0.9,
   "max_dataset_size_gb": 50
 }}
 
 Rules:
+- **TASK TYPE DETECTION (CRITICAL):**
+  - If the user mentions images, photos, pictures, visual, classify images, detect objects, or image-related tasks -> "image_classification"
+  - If the user mentions CSV, spreadsheet, tabular, columns, features, predict a number/price/value, structured data -> "tabular_classification" or "tabular_regression"
+    - Use "tabular_regression" if the target is a continuous number (price, salary, temperature, score)
+    - Use "tabular_classification" if the target is a category (churn, spam, disease yes/no)
+  - If the user mentions text, sentiment, NLP, reviews, tweets, spam detection from text, classify text -> "text_classification"
+  - If ambiguous, default to "image_classification"
+
+- **FRAMEWORK:**
+  - image_classification -> "pytorch"
+  - tabular_classification / tabular_regression -> "scikit-learn"
+  - text_classification -> "pytorch"
+
+- **PREFERRED MODEL:**
+  - image_classification: "resnet18", "resnet50", or "efficientnet_b0"
+  - tabular_classification: "random_forest", "xgboost", or "gradient_boosting"
+  - tabular_regression: "random_forest", "xgboost", or "gradient_boosting"
+  - text_classification: "distilbert", "roberta", or "tfidf_svm"
+
+- **TARGET METRIC:**
+  - classification tasks -> "accuracy"
+  - regression tasks -> "rmse"
+
 - Extract the main topic/domain from the user's message for the project name
 - Generate 2-4 relevant search keywords that would help find appropriate datasets on Kaggle
-- **IMPORTANT: If the user provides a specific Kaggle dataset ID or URL (e.g., "username/dataset-name"), you MUST include that exact dataset reference as the ONLY item in the search_keywords array. Do not add any other keywords.**
-- Choose an appropriate model architecture (resnet18 for simple tasks, resnet50 or efficientnet for complex ones)
-- Keep target_value at 0.9 unless user specifies otherwise
-- **IMPORTANT: If user mentions dataset size limit (e.g., "not more than 1GB", "under 500MB", "max 2GB"), extract that number and set max_dataset_size_gb accordingly**
+- **IMPORTANT: If the user provides a specific Kaggle dataset ID or URL (e.g., "username/dataset-name"), you MUST include that exact dataset reference as the ONLY item in the search_keywords array.**
+- Keep target_value at 0.9 for classification unless user specifies otherwise
+- For regression, set target_value to a reasonable RMSE (e.g., 0.1 or based on domain)
+- **IMPORTANT: If user mentions dataset size limit, extract and set max_dataset_size_gb accordingly**
   - Convert MB to GB (e.g., 500MB = 0.5GB)
-  - If user says "not more than X", use X as the limit
   - If no size mentioned, use default 50GB
 - Respond with ONLY the JSON object, nothing else
 
 Examples:
 
-Example 1 (No size limit):
+Example 1 (Image classification):
 User: "Train a model to classify tomato leaf diseases"
 Response: {{"name": "Tomato Leaf Disease Classifier", "task_type": "image_classification", "framework": "pytorch", "dataset_source": "kaggle", "search_keywords": ["tomato leaf disease", "plantvillage", "plant pathology"], "preferred_model": "resnet18", "target_metric": "accuracy", "target_value": 0.9, "max_dataset_size_gb": 50}}
 
-Example 2 (Explicit dataset provided):
-User: "Train an image classification ML model to classify Dogs and Cats under 300 MB. try using rajarshi2712/dogs-and-cats-classifier dataset"
-Response: {{"name": "Dogs and Cats Classifier", "task_type": "image_classification", "framework": "pytorch", "dataset_source": "kaggle", "search_keywords": ["rajarshi2712/dogs-and-cats-classifier"], "preferred_model": "resnet18", "target_metric": "accuracy", "target_value": 0.9, "max_dataset_size_gb": 0.3}}
+Example 2 (Tabular classification):
+User: "Predict whether a customer will churn using their account data"
+Response: {{"name": "Customer Churn Predictor", "task_type": "tabular_classification", "framework": "scikit-learn", "dataset_source": "kaggle", "search_keywords": ["customer churn", "telecom churn prediction"], "preferred_model": "xgboost", "target_metric": "accuracy", "target_value": 0.9, "max_dataset_size_gb": 50}}
 
-Example 3 (With size limit):
-User: "Train a plant disease classifier with dataset not more than 1GB"
-Response: {{"name": "Plant Disease Classifier", "task_type": "image_classification", "framework": "pytorch", "dataset_source": "kaggle", "search_keywords": ["plant disease", "leaf disease", "crop disease"], "preferred_model": "resnet18", "target_metric": "accuracy", "target_value": 0.9, "max_dataset_size_gb": 1}}
+Example 3 (Tabular regression):
+User: "Predict house prices based on features like area, bedrooms, location"
+Response: {{"name": "House Price Predictor", "task_type": "tabular_regression", "framework": "scikit-learn", "dataset_source": "kaggle", "search_keywords": ["house prices", "real estate prediction", "housing dataset"], "preferred_model": "gradient_boosting", "target_metric": "rmse", "target_value": 0.1, "max_dataset_size_gb": 50}}
 
-Example 4 (MB to GB conversion):
-User: "Create a flower classifier, dataset under 500MB"
-Response: {{"name": "Flower Classifier", "task_type": "image_classification", "framework": "pytorch", "dataset_source": "kaggle", "search_keywords": ["flower classification", "flower species", "botanical"], "preferred_model": "resnet18", "target_metric": "accuracy", "target_value": 0.9, "max_dataset_size_gb": 0.5}}
+Example 4 (Text classification):
+User: "Build a sentiment analysis model for movie reviews"
+Response: {{"name": "Movie Sentiment Analyzer", "task_type": "text_classification", "framework": "pytorch", "dataset_source": "kaggle", "search_keywords": ["movie reviews sentiment", "IMDB reviews", "sentiment analysis"], "preferred_model": "distilbert", "target_metric": "accuracy", "target_value": 0.9, "max_dataset_size_gb": 50}}
 
-Now process this user request:
-User: "Train a model to classify tomato leaf diseases"
-Response: {{"name": "Tomato Leaf Disease Classifier", "task_type": "image_classification", "framework": "pytorch", "dataset_source": "kaggle", "search_keywords": ["tomato leaf disease", "plantvillage", "plant pathology"], "preferred_model": "resnet18", "target_metric": "accuracy", "target_value": 0.9, "max_dataset_size_gb": 50}}
+Example 5 (Image with explicit dataset):
+User: "Train an image classification ML model to classify Dogs and Cats under 300 MB"
+Response: {{"name": "Dogs and Cats Classifier", "task_type": "image_classification", "framework": "pytorch", "dataset_source": "kaggle", "search_keywords": ["dogs cats classifier", "cats vs dogs"], "preferred_model": "resnet18", "target_metric": "accuracy", "target_value": 0.9, "max_dataset_size_gb": 0.3}}
+
+Now process this user request and respond with ONLY the JSON:
 """
     return prompt
 
