@@ -231,6 +231,22 @@ async def execute_evaluation(project_id: str) -> Dict[str, Any]:
         project_metadata["bundle_url"] = bundle_url
         project_metadata["evaluation_metrics"] = metrics["detailed_metrics"]
         
+        # Upload Grad-CAM preview if available
+        gradcam_path = metrics.get("gradcam_preview_path")
+        if gradcam_path and os.path.exists(gradcam_path):
+            import time
+            from google.cloud import storage
+            client = storage.Client()
+            bucket = client.bucket(settings.gcp_bucket_name)
+            blob_path = f"evaluations/{project_id}/gradcam_{int(time.time())}.png"
+            blob = bucket.blob(blob_path)
+            blob.upload_from_filename(gradcam_path)
+            
+            gradcam_url = f"gs://{settings.gcp_bucket_name}/{blob_path}"
+            project_metadata["gradcam_preview_url"] = gradcam_url
+            db_service.log_agent_activity(project_id, f"Uploaded Grad-CAM heatmaps to {gradcam_url}", "info")
+
+        
         db_service.update_project_metadata(project_id, project_metadata)
         db_service.update_project_status(project_id, "completed")
         
@@ -355,6 +371,10 @@ def evaluate_model(
         zero_division=0
     )
     
+    # Generate Grad-CAM preview
+    db_service.log_agent_activity(project_id, "Generating XAI Grad-CAM heatmaps...", "info")
+    gradcam_preview_path = generate_gradcam_preview(model, test_dataset, device)
+    
     return {
         "accuracy": accuracy,
         "precision": precision,
@@ -362,8 +382,129 @@ def evaluate_model(
         "f1_score": f1,
         "num_classes": num_classes,
         "class_labels": class_labels,
-        "detailed_metrics": report
+        "detailed_metrics": report,
+        "gradcam_preview_path": gradcam_preview_path
     }
+
+
+class GradCAM:
+    """Simple hook-based Grad-CAM implementation for PyTorch CNNs."""
+    def __init__(self, model):
+        self.model = model
+        self.gradients = None
+        self.activations = None
+        self.target_layer = self._find_target_layer()
+        if self.target_layer:
+            self.target_layer.register_forward_hook(self.save_activation)
+            self.target_layer.register_full_backward_hook(self.save_gradient)
+
+    def _find_target_layer(self):
+        target = None
+        for module in self.model.modules():
+            if isinstance(module, torch.nn.Conv2d):
+                target = module
+        return target
+
+    def save_activation(self, module, input, output):
+        self.activations = output
+
+    def save_gradient(self, module, grad_input, grad_output):
+        self.gradients = grad_output[0]
+
+    def generate(self, input_tensor, target_class=None):
+        if not self.target_layer:
+            return None
+            
+        self.model.zero_grad()
+        output = self.model(input_tensor)
+        
+        if target_class is None:
+            target_class = output.argmax(dim=1).item()
+            
+        target = output[0, target_class]
+        target.backward()
+        
+        gradients = self.gradients.detach().cpu().numpy()[0]
+        activations = self.activations.detach().cpu().numpy()[0]
+        
+        weights = np.mean(gradients, axis=(1, 2))
+        
+        cam = np.zeros(activations.shape[1:], dtype=np.float32)
+        for i, w in enumerate(weights):
+            cam += w * activations[i]
+            
+        cam = np.maximum(cam, 0)
+        if np.max(cam) > 0:
+            cam = cam - np.min(cam)
+            cam = cam / np.max(cam)
+        return cam
+
+def generate_gradcam_preview(model, test_dataset, device, num_samples=5) -> str:
+    """Generate Grad-CAM heatmaps for a few test samples and return path to the saved preview image."""
+    try:
+        import cv2
+        import numpy as np
+        import matplotlib.pyplot as plt
+    except ImportError:
+        return None
+
+    model.eval()
+    grad_cam = GradCAM(model)
+    if not grad_cam.target_layer:
+        return None
+        
+    indices = np.random.choice(len(test_dataset), min(num_samples, len(test_dataset)), replace=False)
+    fig, axes = plt.subplots(num_samples, 2, figsize=(10, 4 * num_samples))
+    if num_samples == 1:
+        axes = [axes]
+        
+    for i, idx in enumerate(indices):
+        img_tensor, label = test_dataset[idx]
+        img_tensor = img_tensor.unsqueeze(0).to(device)
+        
+        img_display = img_tensor[0].cpu().numpy().transpose(1, 2, 0)
+        mean = np.array([0.485, 0.456, 0.406])
+        std = np.array([0.229, 0.224, 0.225])
+        img_display = std * img_display + mean
+        img_display = np.clip(img_display, 0, 1)
+        
+        # Calculate Grad-CAM
+        heatmap = grad_cam.generate(img_tensor)
+        
+        if heatmap is not None:
+            heatmap = cv2.resize(heatmap, (img_display.shape[1], img_display.shape[0]))
+            heatmap = np.uint8(255 * heatmap)
+            heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+            heatmap = np.float32(heatmap) / 255
+            heatmap = heatmap[:, :, ::-1] # BGR to RGB
+            
+            cam_result = heatmap * 0.4 + img_display * 0.6
+            cam_result = np.clip(cam_result, 0, 1)
+        else:
+            cam_result = img_display
+            
+        with torch.no_grad():
+            pred = model(img_tensor).argmax(dim=1).item()
+            
+        true_label = test_dataset.classes[label]
+        pred_label = test_dataset.classes[pred]
+        title = f"True: {true_label} | Pred: {pred_label}"
+        
+        axes[i][0].imshow(img_display)
+        axes[i][0].set_title(title)
+        axes[i][0].axis('off')
+        
+        axes[i][1].imshow(cam_result)
+        axes[i][1].set_title("Grad-CAM Heatmap")
+        axes[i][1].axis('off')
+        
+    plt.tight_layout()
+    import tempfile
+    save_path = os.path.join(tempfile.gettempdir(), f"gradcam_preview_{np.random.randint(1000)}.png")
+    plt.savefig(save_path)
+    plt.close()
+    
+    return save_path
 
 
 def create_user_bundle(

@@ -113,6 +113,25 @@ const JustificationReport = ({ metadata }) => {
             </div>
           </div>
 
+          {/* Grad-CAM Explainable AI */}
+          {metadata.gradcam_preview_url && (
+            <div className="mb-2 mt-4">
+              <h6 className="d-flex align-items-center gap-2 fw-bold text-danger mb-3">
+                <Magic size={18} /> 5. Explainable AI (Grad-CAM)
+              </h6>
+              <div className="p-3 bg-white" style={{ borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                <p className="text-muted small mb-3">
+                  These visual heatmaps show exactly which regions of the image the AI model looked at to make its decision. Red areas indicate high importance.
+                </p>
+                <img 
+                  src={`https://storage.googleapis.com/${metadata.gradcam_preview_url.replace('gs://', '')}`}
+                  alt="Grad-CAM Heatmaps"
+                  style={{ width: '100%', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                />
+              </div>
+            </div>
+          )}
+
         </Card.Body>
       </Card>
     </motion.div>
