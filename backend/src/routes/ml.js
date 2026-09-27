@@ -137,6 +137,31 @@ router.get('/ml/projects/:projectId/download', verifySession, async (req, res) =
   }
 });
 
+// Sanity Agent: Human-in-the-loop approval
+router.post('/ml/projects/:projectId/sanity-approve', verifySession, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const firebaseUid = req.user.uid;
+    const { actions } = req.body;
+
+    console.log(`Sanity approval for project ${projectId}:`, actions);
+
+    const mcpResponse = await axios.post(
+      `${MCP_SERVER_URL}/api/ml/projects/${projectId}/sanity-approve`,
+      { actions },
+      { params: { user_id: firebaseUid } }
+    );
+
+    res.json(mcpResponse.data);
+  } catch (error) {
+    console.error('Error approving sanity actions:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to approve sanity actions',
+      details: error.response?.data || error.message
+    });
+  }
+});
+
 // Admin endpoints
 router.get('/admin/stats', verifySession, async (req, res) => {
   try {

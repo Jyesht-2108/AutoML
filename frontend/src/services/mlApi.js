@@ -54,4 +54,9 @@ export const uploadCustomDataset = (formData, onUploadProgress) => {
   });
 };
 
+// Sanity Agent: approve/skip fix actions (Human-in-the-Loop)
+export const approveSanityActions = (projectId, actions) => {
+  return mlApi.post(`/api/ml/projects/${projectId}/sanity-approve`, { actions });
+};
+
 export default mlApi;

@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     PLANNER_AGENT_URL: str = "http://127.0.0.1:8001"
     DATASET_AGENT_URL: str = "http://127.0.0.1:8002"
     TRAINING_AGENT_URL: str = "http://127.0.0.1:8003"
+    SANITY_AGENT_URL: str = "http://127.0.0.1:8004"
     GOOGLE_APPLICATION_CREDENTIALS: str = ""
     GCP_BUCKET_NAME: str = ""
     PORT: int = 8000
@@ -717,6 +718,35 @@ async def test_model(project_id: str, user_id: str = Form(...), file: UploadFile
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# --- Sanity Agent: Human-in-the-Loop Approval ---
+
+class SanityApprovalPayload(BaseModel):
+    actions: dict  # {"remove_corrupt": true, "remove_blurry": false, "auto_split": true, "augment_balance": true}
+
+@app.post("/api/ml/projects/{project_id}/sanity-approve")
+async def approve_sanity_actions(project_id: str, payload: SanityApprovalPayload, user_id: str = None):
+    """
+    Human-in-the-loop: user approves/skips sanity fix actions.
+    Forwards the decision to the Sanity Agent.
+    """
+    logger.info(f"Sanity approval for project {project_id}: {payload.actions}")
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                f"{settings.SANITY_AGENT_URL}/agents/sanity/approve",
+                json={"project_id": project_id, "actions": payload.actions}
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Sanity agent returned error: {e.response.text}")
+        raise HTTPException(status_code=e.response.status_code, detail=e.response.text)
+    except Exception as e:
+        logger.error(f"Error forwarding sanity approval: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to forward sanity approval: {str(e)}")
+
+
 # Admin Endpoints
 @app.get("/api/admin/stats")
 async def get_admin_stats(user_id: str):
@@ -745,7 +775,7 @@ async def get_admin_stats(user_id: str):
         
         # Get status breakdown
         status_breakdown = {}
-        statuses = ["draft", "pending_dataset", "pending_sanity", "pending_training", "pending_evaluation", "completed", "failed"]
+        statuses = ["draft", "pending_dataset", "pending_sanity", "pending_sanity_review", "pending_sanity_fix", "pending_training", "pending_evaluation", "completed", "failed"]
         for status in statuses:
             count = supabase.table("projects").select("id", count="exact").eq("status", status).execute()
             status_breakdown[status] = count.count

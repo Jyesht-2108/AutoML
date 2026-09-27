@@ -74,6 +74,8 @@ const AdminDashboard = () => {
       'failed': { bg: 'danger', icon: <XCircle size={14} /> },
       'pending_dataset': { bg: 'info', icon: <Clock size={14} /> },
       'pending_sanity': { bg: 'info', icon: <Clock size={14} /> },
+      'pending_sanity_review': { bg: 'warning', icon: <Clock size={14} /> },
+      'pending_sanity_fix': { bg: 'info', icon: <Clock size={14} /> },
       'pending_training': { bg: 'warning', icon: <Clock size={14} /> },
       'pending_evaluation': { bg: 'primary', icon: <Clock size={14} /> },
       'draft': { bg: 'secondary', icon: <Clock size={14} /> }

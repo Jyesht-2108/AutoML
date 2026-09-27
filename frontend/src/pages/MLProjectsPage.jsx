@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import MLChatBot from '../components/MLChatBot';
 import ProjectList from '../components/ProjectList';
 import AgentLogsViewer from '../components/AgentLogsViewer';
+import SanityReviewPanel from '../components/SanityReviewPanel';
 import { downloadModel } from '../services/mlApi';
 import { 
   Download, 
@@ -50,6 +51,8 @@ const MLProjectsPage = ({ user }) => {
       'draft': { active: 'planner', completed: [] },
       'pending_dataset': { active: 'dataset', completed: ['planner'] },
       'pending_sanity': { active: 'sanity', completed: ['planner', 'dataset'] },
+      'pending_sanity_review': { active: 'sanity', completed: ['planner', 'dataset'] },
+      'pending_sanity_fix': { active: 'sanity', completed: ['planner', 'dataset'] },
       'pending_training': { active: 'training', completed: ['planner', 'dataset', 'sanity'] },
       'pending_evaluation': { active: 'evaluation', completed: ['planner', 'dataset', 'sanity', 'training'] },
       'completed': { active: null, completed: ['planner', 'dataset', 'sanity', 'training', 'evaluation'] },
@@ -314,6 +317,20 @@ const MLProjectsPage = ({ user }) => {
                     <AgentLogsViewer projectId={selectedProject.id} />
                   </div>
                 </Tab>
+
+                {selectedProject.status === 'pending_sanity_review' && (
+                  <Tab eventKey="sanity" title="🔬 Sanity Review" className="position-relative">
+                    <div className="mt-3">
+                      <SanityReviewPanel 
+                        project={selectedProject}
+                        onApproved={() => {
+                          setShowDetailsModal(false);
+                          setRefreshTrigger(prev => prev + 1);
+                        }}
+                      />
+                    </div>
+                  </Tab>
+                )}
                 
                 <Tab eventKey="metadata" title="Metadata">
                   <div className="mt-3">

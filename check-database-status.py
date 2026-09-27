@@ -26,6 +26,8 @@ for p in projects.data:
         'draft': '📝',
         'pending_dataset': '⏳',
         'pending_sanity': '🔬',
+        'pending_sanity_review': '👤',
+        'pending_sanity_fix': '🔧',
         'pending_training': '🔄',
         'pending_evaluation': '📊',
         'completed': '✅',

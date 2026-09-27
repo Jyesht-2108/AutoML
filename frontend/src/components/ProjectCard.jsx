@@ -29,7 +29,19 @@ const ProjectCard = ({ project, onViewDetails, onDownload }) => {
         color: 'info', 
         icon: <HourglassSplit size={16} />, 
         text: 'Sanity Check',
+        progress: 30
+      },
+      'pending_sanity_review': { 
+        color: 'warning', 
+        icon: <HourglassSplit size={16} />, 
+        text: '⚡ Review Required',
         progress: 35
+      },
+      'pending_sanity_fix': { 
+        color: 'info', 
+        icon: <HourglassSplit size={16} />, 
+        text: 'Applying Fixes',
+        progress: 40
       },
       'pending_training': { 
         color: 'warning', 
