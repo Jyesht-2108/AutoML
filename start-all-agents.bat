@@ -30,6 +30,18 @@ timeout /t 2
 
 start "Frontend" cmd /k "cd frontend && npm run dev"
 
+timeout /t 2
+
+start "Sanity Agent" cmd /k "cd Sanity-Agent\agent && venv\Scripts\activate && uvicorn main:app --reload --port 8004"
+
+timeout /t 2
+
+start "Privacy Agent" cmd /k "cd Privacy-Agent\agent && venv\Scripts\activate && uvicorn main:app --reload --port 8005"
+
+timeout /t 2
+
+start "Trainer Agent" cmd /k "cd Trainer-Agent\agent && venv\Scripts\activate && uvicorn main:app --reload --port 8003"
+
 echo.
 echo ========================================
 echo All services are starting...

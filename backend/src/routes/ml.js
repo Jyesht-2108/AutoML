@@ -162,6 +162,31 @@ router.post('/ml/projects/:projectId/sanity-approve', verifySession, async (req,
   }
 });
 
+// Privacy Agent: Human-in-the-loop approval
+router.post('/ml/projects/:projectId/privacy-approve', verifySession, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const firebaseUid = req.user.uid;
+    const { actions } = req.body;
+
+    console.log(`Privacy approval for project ${projectId}:`, actions);
+
+    const mcpResponse = await axios.post(
+      `${MCP_SERVER_URL}/api/ml/projects/${projectId}/privacy-approve`,
+      { actions },
+      { params: { user_id: firebaseUid } }
+    );
+
+    res.json(mcpResponse.data);
+  } catch (error) {
+    console.error('Error approving privacy actions:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to approve privacy actions',
+      details: error.response?.data || error.message
+    });
+  }
+});
+
 // Trainer Agent: Human-in-the-loop training configuration
 router.post('/ml/projects/:projectId/training-config', verifySession, async (req, res) => {
   try {

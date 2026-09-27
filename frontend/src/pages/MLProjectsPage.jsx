@@ -5,6 +5,7 @@ import MLChatBot from '../components/MLChatBot';
 import ProjectList from '../components/ProjectList';
 import AgentLogsViewer from '../components/AgentLogsViewer';
 import SanityReviewPanel from '../components/SanityReviewPanel';
+import PrivacyReviewPanel from '../components/PrivacyReviewPanel';
 import TrainingConfigPanel from '../components/TrainingConfigPanel';
 import { downloadModel } from '../services/mlApi';
 import { 
@@ -54,11 +55,14 @@ const MLProjectsPage = ({ user }) => {
       'pending_sanity': { active: 'sanity', completed: ['planner', 'dataset'] },
       'pending_sanity_review': { active: 'sanity', completed: ['planner', 'dataset'] },
       'pending_sanity_fix': { active: 'sanity', completed: ['planner', 'dataset'] },
-      'pending_training_config': { active: 'training', completed: ['planner', 'dataset', 'sanity'] },
-      'pending_training': { active: 'training', completed: ['planner', 'dataset', 'sanity'] },
-      'pending_evaluation': { active: 'evaluation', completed: ['planner', 'dataset', 'sanity', 'training'] },
-      'completed': { active: null, completed: ['planner', 'dataset', 'sanity', 'training', 'evaluation'] },
-      'export_ready': { active: null, completed: ['planner', 'dataset', 'sanity', 'training', 'evaluation'] }
+      'pending_privacy': { active: 'privacy', completed: ['planner', 'dataset', 'sanity'] },
+      'pending_privacy_review': { active: 'privacy', completed: ['planner', 'dataset', 'sanity'] },
+      'pending_privacy_fix': { active: 'privacy', completed: ['planner', 'dataset', 'sanity'] },
+      'pending_training_config': { active: 'training', completed: ['planner', 'dataset', 'sanity', 'privacy'] },
+      'pending_training': { active: 'training', completed: ['planner', 'dataset', 'sanity', 'privacy'] },
+      'pending_evaluation': { active: 'evaluation', completed: ['planner', 'dataset', 'sanity', 'privacy', 'training'] },
+      'completed': { active: null, completed: ['planner', 'dataset', 'sanity', 'privacy', 'training', 'evaluation'] },
+      'export_ready': { active: null, completed: ['planner', 'dataset', 'sanity', 'privacy', 'training', 'evaluation'] }
     };
     return stages[status] || stages['draft'];
   };
@@ -324,6 +328,20 @@ const MLProjectsPage = ({ user }) => {
                   <Tab eventKey="sanity" title="🔬 Sanity Review" className="position-relative">
                     <div className="mt-3">
                       <SanityReviewPanel 
+                        project={selectedProject}
+                        onApproved={() => {
+                          setShowDetailsModal(false);
+                          setRefreshTrigger(prev => prev + 1);
+                        }}
+                      />
+                    </div>
+                  </Tab>
+                )}
+
+                {selectedProject.status === 'pending_privacy_review' && (
+                  <Tab eventKey="privacy" title="🛡️ Privacy Review" className="position-relative">
+                    <div className="mt-3">
+                      <PrivacyReviewPanel 
                         project={selectedProject}
                         onApproved={() => {
                           setShowDetailsModal(false);

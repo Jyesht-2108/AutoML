@@ -41,7 +41,25 @@ const ProjectCard = ({ project, onViewDetails, onDownload }) => {
         color: 'info', 
         icon: <HourglassSplit size={16} />, 
         text: 'Applying Fixes',
+        progress: 35
+      },
+      'pending_privacy': { 
+        color: 'secondary', 
+        icon: <HourglassSplit size={16} />, 
+        text: 'Privacy Audit',
         progress: 40
+      },
+      'pending_privacy_review': { 
+        color: 'warning', 
+        icon: <HourglassSplit size={16} />, 
+        text: '🛡️ Privacy Review',
+        progress: 42
+      },
+      'pending_privacy_fix': { 
+        color: 'secondary', 
+        icon: <HourglassSplit size={16} />, 
+        text: 'Masking Data',
+        progress: 44
       },
       'pending_training_config': { 
         color: 'primary', 

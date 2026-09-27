@@ -694,14 +694,14 @@ def process_audit(project_id: str):
             log_to_supabase(project_id, "✅ Dataset is clean — no fixes needed", "info")
             supabase.table("projects").update({
                 "metadata": metadata,
-                "status": "pending_training_config",
+                "status": "pending_privacy",
                 "updated_at": datetime.now(UTC).isoformat(),
             }).eq("id", project_id).execute()
             send_chat_message(user_id,
                 f"✅ Data Sanity Check Passed!\n"
                 f"📊 {report['total_images']} images, {report['num_classes']} classes — No issues found.\n"
-                f"⚙️ Please configure training settings...")
-            print(f"[SANITY] ✅ Clean dataset — advancing to training config")
+                f"🛡️ Proceeding to Privacy Agent...")
+            print(f"[SANITY] ✅ Clean dataset — advancing to privacy")
 
     except Exception as exc:
         print(f"[SANITY] ❌ Audit error: {exc}")
@@ -732,12 +732,12 @@ def process_fix(project_id: str):
 
         if not sanity_actions:
             # User skipped all actions
-            log_to_supabase(project_id, "User skipped all fixes — advancing to training config", "info")
+            log_to_supabase(project_id, "User skipped all fixes — advancing to privacy", "info")
             supabase.table("projects").update({
-                "status": "pending_training_config",
+                "status": "pending_privacy",
                 "updated_at": datetime.now(UTC).isoformat(),
             }).eq("id", project_id).execute()
-            send_chat_message(user_id, "⏭️ Sanity fixes skipped. Please configure training settings...")
+            send_chat_message(user_id, "⏭️ Sanity fixes skipped. Proceeding to Privacy Agent...")
             return
 
         send_chat_message(user_id, "🔧 Applying approved data fixes...")
@@ -817,7 +817,7 @@ def process_fix(project_id: str):
         metadata["sanity_fix_results"] = fix_results
         supabase.table("projects").update({
             "metadata": metadata,
-            "status": "pending_training_config",
+            "status": "pending_privacy",
             "updated_at": datetime.now(UTC).isoformat(),
         }).eq("id", project_id).execute()
 
@@ -826,8 +826,8 @@ def process_fix(project_id: str):
         send_chat_message(user_id,
             f"✅ Dataset sanitized successfully!\n"
             f"Applied fixes:\n" + "\n".join(fix_lines) + "\n\n"
-            f"⚙️ Please configure training settings...")
-        log_to_supabase(project_id, "✅ Fix phase complete — advancing to training config", "info")
+            f"🛡️ Proceeding to Privacy Agent...")
+        log_to_supabase(project_id, "✅ Fix phase complete — advancing to privacy", "info")
         print(f"[SANITY] ✅ Fix phase complete for {project_id}")
 
     except Exception as exc:
@@ -932,14 +932,14 @@ async def approve_sanity_actions(req: SanityApprovalRequest):
         log_to_supabase(req.project_id, f"User approved actions: {req.actions}", "info")
         return {"success": True, "message": "Fix phase triggered", "status": "pending_sanity_fix"}
     else:
-        # Skip all — go straight to training config
+        # Skip all — go straight to privacy
         supabase.table("projects").update({
             "metadata": metadata,
-            "status": "pending_training_config",
+            "status": "pending_privacy",
             "updated_at": datetime.now(UTC).isoformat(),
         }).eq("id", req.project_id).execute()
-        log_to_supabase(req.project_id, "User skipped all fixes — advancing to training config", "info")
-        return {"success": True, "message": "Skipped fixes — advancing to training config", "status": "pending_training_config"}
+        log_to_supabase(req.project_id, "User skipped all fixes — advancing to privacy", "info")
+        return {"success": True, "message": "Skipped fixes — advancing to privacy", "status": "pending_privacy"}
 
 
 @app.get("/agents/sanity/status/{project_id}")

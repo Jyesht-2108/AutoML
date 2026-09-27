@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     DATASET_AGENT_URL: str = "http://127.0.0.1:8002"
     TRAINING_AGENT_URL: str = "http://127.0.0.1:8003"
     SANITY_AGENT_URL: str = "http://127.0.0.1:8004"
+    PRIVACY_AGENT_URL: str = "http://127.0.0.1:8005"
     GOOGLE_APPLICATION_CREDENTIALS: str = ""
     GCP_BUCKET_NAME: str = ""
     PORT: int = 8000
@@ -745,6 +746,35 @@ async def approve_sanity_actions(project_id: str, payload: SanityApprovalPayload
     except Exception as e:
         logger.error(f"Error forwarding sanity approval: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to forward sanity approval: {str(e)}")
+
+
+# --- Privacy Agent: Human-in-the-Loop Approval ---
+
+class PrivacyApprovalPayload(BaseModel):
+    actions: dict
+
+@app.post("/api/ml/projects/{project_id}/privacy-approve")
+async def approve_privacy_actions(project_id: str, payload: PrivacyApprovalPayload, user_id: str = None):
+    """
+    Human-in-the-loop: user approves/skips privacy masking actions.
+    Forwards the decision to the Privacy Agent.
+    """
+    logger.info(f"Privacy approval for project {project_id}: {payload.actions}")
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                f"{settings.PRIVACY_AGENT_URL}/agents/privacy/approve",
+                json={"project_id": project_id, "actions": payload.actions}
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Privacy agent returned error: {e.response.text}")
+        raise HTTPException(status_code=e.response.status_code, detail=e.response.text)
+    except Exception as e:
+        logger.error(f"Error forwarding privacy approval: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to forward privacy approval: {str(e)}")
 
 
 # --- Trainer Agent: Human-in-the-Loop Config ---
