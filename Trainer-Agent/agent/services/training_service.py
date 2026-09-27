@@ -105,6 +105,7 @@ async def execute_training(project_id: str) -> Dict[str, Any]:
         preferred_model = project_metadata.get("preferred_model", "resnet18")
         epochs = project_metadata.get("epochs", settings.default_epochs)
         learning_rate = project_metadata.get("learning_rate", settings.default_learning_rate)
+        batch_size = project_metadata.get("batch_size", settings.batch_size)
         
         # Step 3: Download dataset from GCP (Requirement 2.1, 2.4)
         gcs_url = dataset.get("gcs_url")
@@ -286,7 +287,7 @@ async def execute_training(project_id: str) -> Dict[str, Any]:
                 num_classes=num_classes,
                 epochs=epochs,
                 lr=learning_rate,
-                batch_size=settings.batch_size
+                batch_size=batch_size
             )
             
             # Prepare data loaders
