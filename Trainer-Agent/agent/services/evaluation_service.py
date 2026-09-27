@@ -210,7 +210,8 @@ async def execute_evaluation(project_id: str) -> Dict[str, Any]:
             model_path=model_path,
             model_architecture=model_architecture,
             class_labels=metrics["class_labels"],
-            num_classes=metrics["num_classes"]
+            num_classes=metrics["num_classes"],
+            project_metadata=project_metadata
         )
         
         db_service.log_agent_activity(
@@ -371,7 +372,8 @@ def create_user_bundle(
     model_path: str,
     model_architecture: str,
     class_labels: List[str],
-    num_classes: int
+    num_classes: int,
+    project_metadata: Dict[str, Any] = None
 ) -> str:
     """
     Create a downloadable bundle with model, predict script, and labels.
@@ -479,14 +481,54 @@ if __name__ == "__main__":
     with open(os.path.join(export_dir, "predict.py"), "w") as f:
         f.write(predict_code)
     
+    
+    # Check if we have metadata to generate a justification report
+    if project_metadata is None:
+        project_metadata = {}
+        
+    # Write metadata as JSON
+    with open(os.path.join(export_dir, "metadata.json"), "w") as f:
+        json.dump(project_metadata, f, indent=2)
+        
+    # Extract rationales and steps
+    planner_rationale = project_metadata.get("planner_rationale", "No planner rationale provided.")
+    sanity_results = project_metadata.get("sanity_fix_results", {})
+    privacy_results = project_metadata.get("privacy_fix_results", {})
+    
+    sanity_text = "\\n- ".join([f"{k}: {v}" for k, v in sanity_results.items()]) if sanity_results else "No sanity actions taken."
+    privacy_text = "\\n- ".join([f"{k}: {v}" for k, v in privacy_results.items()]) if privacy_results else "No privacy actions taken."
+    
     # 4. Create README
     readme = f"""# {project_name} - Trained Model Bundle
 
 ## Contents
 - `model.pth`: Trained PyTorch model weights
 - `labels.json`: Class labels mapping
+- `metadata.json`: Complete project execution metadata and logs
 - `predict.py`: Inference script
-- `README.txt`: This file
+- `README.md`: This file
+
+## AI Justification & Pipeline Steps
+### 1. AI Planner Strategy
+The AI Planner selected this architecture and training approach based on your request:
+> {planner_rationale}
+
+### 2. Data Sanity Audits & Fixes
+The Sanity Agent performed the following auto-fixes on the dataset:
+- {sanity_text}
+
+### 3. Privacy Audits & Masking
+The Privacy Agent executed the following PII masking steps:
+- {privacy_text}
+
+### 4. Final Training Configuration
+- Architecture: {model_architecture}
+- Number of classes: {num_classes}
+- Epochs: {project_metadata.get("epochs", "N/A")}
+- Learning Rate: {project_metadata.get("learning_rate", "N/A")}
+- Batch Size: {project_metadata.get("batch_size", "N/A")}
+
+---
 
 ## Requirements
 ```bash
@@ -498,18 +540,8 @@ pip install torch torchvision pillow
 python predict.py path/to/your/image.jpg
 ```
 
-## Model Details
-- Architecture: {model_architecture}
-- Number of classes: {num_classes}
-- Classes: {', '.join(class_labels)}
-
-## Example
-```bash
-python predict.py test_image.jpg
-# Output:
-# Prediction: melanoma
-# Confidence: 94.32%
-```
+## Classes
+{', '.join(class_labels)}
 
 ## Notes
 - The model expects RGB images
@@ -517,7 +549,7 @@ python predict.py test_image.jpg
 - Predictions include confidence scores
 """
     
-    with open(os.path.join(export_dir, "README.txt"), "w") as f:
+    with open(os.path.join(export_dir, "README.md"), "w") as f:
         f.write(readme)
     
     # 5. Create zip file
