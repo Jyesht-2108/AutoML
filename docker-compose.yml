@@ -69,6 +69,8 @@ services:
       - "8004:8004"
     env_file:
       - .env.docker
+    volumes:
+      - ./credentials:/app/credentials
     restart: unless-stopped
 
   privacy-agent:
@@ -79,6 +81,8 @@ services:
       - "8005:8005"
     env_file:
       - .env.docker
+    volumes:
+      - ./credentials:/app/credentials
     restart: unless-stopped
 
   deployment-agent:
