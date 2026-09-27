@@ -7,6 +7,7 @@ import AgentLogsViewer from '../components/AgentLogsViewer';
 import SanityReviewPanel from '../components/SanityReviewPanel';
 import PrivacyReviewPanel from '../components/PrivacyReviewPanel';
 import TrainingConfigPanel from '../components/TrainingConfigPanel';
+import JustificationReport from '../components/JustificationReport';
 import { downloadModel } from '../services/mlApi';
 import { 
   Download, 
@@ -315,6 +316,12 @@ const MLProjectsPage = ({ user }) => {
                         </div>
                       </div>
                     )}
+                  </div>
+                </Tab>
+
+                <Tab eventKey="justification" title="📜 AI Justification">
+                  <div className="mt-3">
+                    <JustificationReport metadata={selectedProject.metadata} />
                   </div>
                 </Tab>
                 
