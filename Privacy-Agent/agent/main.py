@@ -188,6 +188,157 @@ def blur_faces(filepath: str, faces: list):
         print(f"[PRIVACY] Error blurring faces in {filepath}: {e}")
 
 # ---------------------------------------------------------------------------
+# Tabular & Text Privacy Audit
+# ---------------------------------------------------------------------------
+import re
+import csv
+
+PII_PATTERNS = {
+    "email": re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'),
+    "phone": re.compile(r'\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b'),
+    "ssn": re.compile(r'\b\d{3}[-]?\d{2}[-]?\d{4}\b'),
+}
+
+PII_COLUMN_NAMES = {"name", "first_name", "last_name", "full_name", "email", "phone", 
+                     "address", "ssn", "social_security", "credit_card", "dob", "date_of_birth",
+                     "passport", "license", "ip_address"}
+
+
+def audit_tabular_privacy(extract_dir: str) -> dict:
+    """Scan CSV columns for PII patterns and sensitive column names."""
+    from pathlib import Path
+    csv_files = []
+    for dirpath, _, filenames in os.walk(extract_dir):
+        for f in filenames:
+            if Path(f).suffix.lower() in {".csv", ".tsv"}:
+                csv_files.append(os.path.join(dirpath, f))
+
+    if not csv_files:
+        return {"total_files": 0, "pii_columns": [], "pii_samples": {}, "proposed_actions": {}}
+
+    primary = max(csv_files, key=os.path.getsize)
+    rows = []
+    headers = []
+    try:
+        with open(primary, "r", encoding="utf-8", errors="replace") as f:
+            reader = csv.DictReader(f)
+            headers = reader.fieldnames or []
+            for i, row in enumerate(reader):
+                rows.append(row)
+                if i >= 5000:
+                    break
+    except Exception:
+        return {"total_files": len(csv_files), "pii_columns": [], "pii_samples": {}, "proposed_actions": {}}
+
+    pii_columns = []
+    pii_samples = {}
+
+    # Check column names
+    for col in headers:
+        if col.lower().replace(" ", "_") in PII_COLUMN_NAMES:
+            pii_columns.append(col)
+            pii_samples[col] = {"reason": "Column name matches PII pattern", "sample_count": len(rows)}
+
+    # Check column values with regex
+    sample_rows = rows[:500]
+    for col in headers:
+        if col in pii_columns:
+            continue
+        for pattern_name, pattern in PII_PATTERNS.items():
+            matches = sum(1 for r in sample_rows if pattern.search(r.get(col, "")))
+            if matches > len(sample_rows) * 0.1:  # >10% match rate
+                pii_columns.append(col)
+                pii_samples[col] = {"reason": f"Contains {pattern_name} patterns ({matches}/{len(sample_rows)} rows)", "pattern": pattern_name}
+                break
+
+    proposed_actions = {}
+    if pii_columns:
+        proposed_actions["mask_pii_columns"] = {
+            "description": f"Mask {len(pii_columns)} column(s) containing PII: {pii_columns}",
+            "columns": pii_columns,
+            "recommended": True,
+        }
+
+    return {
+        "total_files": len(csv_files),
+        "total_rows": len(rows),
+        "pii_columns": pii_columns,
+        "pii_samples": pii_samples,
+        "proposed_actions": proposed_actions,
+    }
+
+
+def audit_text_privacy(extract_dir: str) -> dict:
+    """Scan text data for PII (emails, phone numbers, names)."""
+    from pathlib import Path
+    text_files = []
+    for dirpath, _, filenames in os.walk(extract_dir):
+        for f in filenames:
+            if Path(f).suffix.lower() in {".csv", ".tsv", ".jsonl", ".txt"}:
+                text_files.append(os.path.join(dirpath, f))
+
+    if not text_files:
+        return {"total_files": 0, "pii_found": 0, "proposed_actions": {}}
+
+    primary = max(text_files, key=os.path.getsize)
+    rows = []
+    headers = []
+    try:
+        with open(primary, "r", encoding="utf-8", errors="replace") as f:
+            reader = csv.DictReader(f)
+            headers = reader.fieldnames or []
+            for i, row in enumerate(reader):
+                rows.append(row)
+                if i >= 5000:
+                    break
+    except Exception:
+        return {"total_files": len(text_files), "pii_found": 0, "proposed_actions": {}}
+
+    # Find the text column
+    text_candidates = ["text", "sentence", "review", "comment", "content", "body", "message", "tweet"]
+    text_col = None
+    for col in headers:
+        if col.lower() in text_candidates:
+            text_col = col
+            break
+    if not text_col:
+        avg_lengths = {}
+        for col in headers:
+            lengths = [len(r.get(col, "")) for r in rows[:100]]
+            avg_lengths[col] = sum(lengths) / len(lengths) if lengths else 0
+        text_col = max(avg_lengths, key=avg_lengths.get) if avg_lengths else (headers[0] if headers else None)
+
+    if not text_col:
+        return {"total_files": len(text_files), "pii_found": 0, "proposed_actions": {}}
+
+    pii_count = 0
+    sample_rows = rows[:1000]
+    for r in sample_rows:
+        text = r.get(text_col, "")
+        for pattern in PII_PATTERNS.values():
+            if pattern.search(text):
+                pii_count += 1
+                break
+
+    proposed_actions = {}
+    if pii_count > 0:
+        pii_pct = (pii_count / len(sample_rows)) * 100
+        proposed_actions["redact_text_pii"] = {
+            "description": f"Redact PII from ~{pii_count} text entries ({pii_pct:.1f}% of sampled rows)",
+            "text_column": text_col,
+            "recommended": True,
+        }
+
+    return {
+        "total_files": len(text_files),
+        "total_rows": len(rows),
+        "text_column": text_col,
+        "pii_found": pii_count,
+        "proposed_actions": proposed_actions,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Phase A: AUDIT
 # ---------------------------------------------------------------------------
 def process_pending_privacy(project_id: str):
@@ -200,6 +351,7 @@ def process_pending_privacy(project_id: str):
         project = project_resp.data[0]
         user_id = project["user_id"]
         metadata = project.get("metadata", {}) or {}
+        task_type = project.get("task_type", "image_classification")
         
         dataset_resp = supabase.table("datasets").select("*").eq("project_id", project_id).execute()
         if not dataset_resp.data:
@@ -217,48 +369,73 @@ def process_pending_privacy(project_id: str):
             download_from_gcs(gcs_url, zip_path)
             with zipfile.ZipFile(zip_path, "r") as zf:
                 zf.extractall(extract_dir)
+
+            # Route based on task type
+            if task_type in ("tabular_classification", "tabular_regression"):
+                log_to_supabase(project_id, "Scanning tabular data for PII columns...", "info")
+                send_chat_message(user_id, "🔍 Scanning your tabular data for PII (emails, phones, names)...")
+                privacy_result = audit_tabular_privacy(extract_dir)
+                report = {
+                    "data_type": "tabular",
+                    **privacy_result,
+                }
+                has_issues = bool(privacy_result.get("proposed_actions"))
+
+            elif task_type == "text_classification":
+                log_to_supabase(project_id, "Scanning text data for PII...", "info")
+                send_chat_message(user_id, "🔍 Scanning your text data for PII (emails, phone numbers)...")
+                privacy_result = audit_text_privacy(extract_dir)
+                report = {
+                    "data_type": "text",
+                    **privacy_result,
+                }
+                has_issues = bool(privacy_result.get("proposed_actions"))
+
+            else:
+                # Image: existing face detection
+                log_to_supabase(project_id, "Scanning dataset for privacy risks (faces)...", "info")
+                send_chat_message(user_id, f"🔍 Scanning dataset for privacy risks (e.g., human faces)...")
                 
-            log_to_supabase(project_id, "Scanning dataset for privacy risks (faces)...", "info")
-            send_chat_message(user_id, f"🔍 Scanning dataset for privacy risks (e.g., human faces)...")
-            
-            images_with_faces = []
-            total_images = 0
-            total_faces = 0
-            
-            for root, _, files in os.walk(extract_dir):
-                for f in files:
-                    if _is_image_file(f):
-                        total_images += 1
-                        filepath = os.path.join(root, f)
-                        faces = detect_faces(filepath)
-                        if faces:
-                            rel_path = os.path.relpath(filepath, extract_dir)
-                            images_with_faces.append({
-                                "file": rel_path,
-                                "faces": faces
-                            })
-                            total_faces += len(faces)
-            
-            report = {
-                "total_images": total_images,
-                "images_with_faces_count": len(images_with_faces),
-                "total_faces_detected": total_faces,
-                "images_with_faces": images_with_faces
-            }
+                images_with_faces = []
+                total_images = 0
+                total_faces = 0
+                
+                for root, _, files in os.walk(extract_dir):
+                    for f in files:
+                        if _is_image_file(f):
+                            total_images += 1
+                            filepath = os.path.join(root, f)
+                            faces = detect_faces(filepath)
+                            if faces:
+                                rel_path = os.path.relpath(filepath, extract_dir)
+                                images_with_faces.append({
+                                    "file": rel_path,
+                                    "faces": faces
+                                })
+                                total_faces += len(faces)
+                
+                report = {
+                    "data_type": "image",
+                    "total_images": total_images,
+                    "images_with_faces_count": len(images_with_faces),
+                    "total_faces_detected": total_faces,
+                    "images_with_faces": images_with_faces
+                }
+                
+                if len(images_with_faces) > 0:
+                    report["proposed_actions"] = {
+                        "blur_faces": {
+                            "description": f"Apply Gaussian blur to {total_faces} detected faces across {len(images_with_faces)} images.",
+                            "recommended": True
+                        }
+                    }
+                has_issues = len(images_with_faces) > 0
             
             metadata["privacy_report"] = report
             
-            if len(images_with_faces) > 0:
-                # We found faces. Propose action and wait for HITL
-                proposed_actions = {
-                    "blur_faces": {
-                        "description": f"Apply Gaussian blur to {total_faces} detected faces across {len(images_with_faces)} images.",
-                        "recommended": True
-                    }
-                }
-                report["proposed_actions"] = proposed_actions
-                
-                log_to_supabase(project_id, f"Found {total_faces} faces in {len(images_with_faces)} images. Awaiting user review.", "warning")
+            if has_issues:
+                proposed = report.get("proposed_actions", {})
+                log_to_supabase(project_id, f"Privacy risks found. {len(proposed)} action(s) proposed. Awaiting user review.", "warning")
                 
                 supabase.table("projects").update({
                     "metadata": metadata,
@@ -266,9 +443,10 @@ def process_pending_privacy(project_id: str):
                     "updated_at": datetime.now(UTC).isoformat(),
                 }).eq("id", project_id).execute()
                 
+                action_lines = [f"  • {a['description']}" for a in proposed.values()]
                 send_chat_message(user_id,
                     f"⚠️ Privacy risks detected!\n"
-                    f"Found {total_faces} faces in {len(images_with_faces)} images.\n"
+                    + "\n".join(action_lines) + "\n\n"
                     f"👉 Please review and approve privacy masking in the project details panel.")
                 print(f"[PRIVACY] ⏳ Waiting for user approval (pending_privacy_review)")
             else:
@@ -282,7 +460,7 @@ def process_pending_privacy(project_id: str):
                 
                 send_chat_message(user_id,
                     f"✅ Data Privacy Check Passed!\n"
-                    f"No PII (faces) detected in the dataset.\n"
+                    f"No PII detected in the dataset.\n"
                     f"⚙️ Please configure training settings...")
                 print(f"[PRIVACY] ✅ Clean dataset — advancing to training config")
 

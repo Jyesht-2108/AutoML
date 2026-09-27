@@ -63,6 +63,13 @@ async def execute_evaluation(project_id: str) -> Dict[str, Any]:
             db_service.log_agent_activity(project_id, error_msg, "error")
             return {"success": False, "error": error_msg}
         
+        # Route based on task_type
+        task_type = project.get("task_type", "image_classification")
+        if task_type in ("tabular_classification", "tabular_regression", "text_classification"):
+            db_service.log_agent_activity(project_id, f"Routing to sklearn evaluation (task_type={task_type})", "info")
+            from services.tabular_evaluation_service import execute_sklearn_evaluation
+            return await execute_sklearn_evaluation(project_id)
+
         # Update status to 'evaluating'
         db_service.update_project_status(project_id, "evaluating")
         

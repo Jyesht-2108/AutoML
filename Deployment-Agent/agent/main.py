@@ -116,11 +116,9 @@ import torch.nn as nn
 from torchvision import models, transforms
 from PIL import Image
 from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.responses import JSONResponse
 
 app = FastAPI(title="AutoML Deployed Model")
 
-# Architecture and Labels Configuration
 MODEL_ARCHITECTURE = "{model_architecture}"
 NUM_CLASSES = {num_classes}
 CLASS_LABELS = {labels_json}
@@ -138,29 +136,23 @@ transform = transforms.Compose([
 @app.on_event("startup")
 def load_model():
     global model
-    print("Loading model...")
-    
     if MODEL_ARCHITECTURE == "resnet18":
         model = models.resnet18(weights=None)
-        model.fc = nn.Linear(model.fc.in_features, NUM_CLASSES)
-    elif MODEL_ARCHITECTURE == "resnet34":
-        model = models.resnet34(weights=None)
         model.fc = nn.Linear(model.fc.in_features, NUM_CLASSES)
     elif MODEL_ARCHITECTURE == "resnet50":
         model = models.resnet50(weights=None)
         model.fc = nn.Linear(model.fc.in_features, NUM_CLASSES)
-    elif MODEL_ARCHITECTURE == "mobilenet_v2":
-        model = models.mobilenet_v2(weights=None)
-        model.classifier[1] = nn.Linear(model.classifier[1].in_features, NUM_CLASSES)
     elif MODEL_ARCHITECTURE == "efficientnet_b0":
         model = models.efficientnet_b0(weights=None)
         model.classifier[1] = nn.Linear(model.classifier[1].in_features, NUM_CLASSES)
+    elif MODEL_ARCHITECTURE == "mobilenet_v2":
+        model = models.mobilenet_v2(weights=None)
+        model.classifier[1] = nn.Linear(model.classifier[1].in_features, NUM_CLASSES)
     else:
-        raise ValueError(f"Unsupported architecture: {{MODEL_ARCHITECTURE}}")
-        
+        model = models.resnet18(weights=None)
+        model.fc = nn.Linear(model.fc.in_features, NUM_CLASSES)
     model.load_state_dict(torch.load("model.pth", map_location=device))
     model.eval()
-    print("Model loaded successfully!")
 
 @app.get("/")
 def health_check():
@@ -170,25 +162,145 @@ def health_check():
 async def predict(file: UploadFile = File(...)):
     if not model:
         raise HTTPException(status_code=503, detail="Model not loaded")
-        
     try:
         contents = await file.read()
         image = Image.open(io.BytesIO(contents)).convert('RGB')
         img_tensor = transform(image).unsqueeze(0).to(device)
-        
         with torch.no_grad():
             outputs = model(img_tensor)
             probabilities = torch.nn.functional.softmax(outputs, dim=1)
             confidence, predicted = torch.max(probabilities, 1)
-            
         class_idx = predicted.item()
         class_name = CLASS_LABELS[class_idx] if class_idx < len(CLASS_LABELS) else f"Class_{{class_idx}}"
+        return {{"success": True, "prediction": class_name, "confidence": confidence.item()}}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+"""
+
+
+def generate_sklearn_requirements() -> str:
+    return """fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
+scikit-learn>=1.3.0
+xgboost>=2.0.0
+numpy>=1.24.0
+"""
+
+
+def generate_sklearn_dockerfile() -> str:
+    return """FROM python:3.10-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+"""
+
+
+def generate_tabular_app_py(feature_names: list, class_labels: list, target_col: str, task_type: str) -> str:
+    features_json = json.dumps(feature_names)
+    labels_json = json.dumps(class_labels)
+
+    return f"""import pickle
+import json
+import numpy as np
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import Dict, Any
+
+app = FastAPI(title="AutoML Deployed Model — Tabular")
+
+FEATURE_NAMES = {features_json}
+CLASS_LABELS = {labels_json}
+TARGET_COLUMN = "{target_col}"
+TASK_TYPE = "{task_type}"
+
+# Load model
+with open("model.pkl", "rb") as f:
+    model = pickle.load(f)
+
+class PredictionInput(BaseModel):
+    features: Dict[str, Any]
+
+@app.get("/")
+def health_check():
+    return {{"status": "healthy", "task_type": TASK_TYPE, "features": FEATURE_NAMES}}
+
+@app.post("/predict")
+async def predict(data: PredictionInput):
+    try:
+        X = np.array([[float(data.features.get(f, 0)) for f in FEATURE_NAMES]])
+        prediction = model.predict(X)[0]
         
-        return {{
+        result = {{"success": True}}
+        
+        if TASK_TYPE.endswith("regression"):
+            result["prediction"] = float(prediction)
+        else:
+            result["prediction"] = int(prediction)
+            if CLASS_LABELS:
+                result["label"] = CLASS_LABELS[int(prediction)]
+            
+            if hasattr(model, "predict_proba"):
+                proba = model.predict_proba(X)[0]
+                result["probabilities"] = {{
+                    CLASS_LABELS[i] if i < len(CLASS_LABELS) else str(i): round(float(p), 4)
+                    for i, p in enumerate(proba)
+                }}
+        
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+"""
+
+
+def generate_text_app_py(class_labels: list) -> str:
+    labels_json = json.dumps(class_labels)
+
+    return f"""import pickle
+import json
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+
+app = FastAPI(title="AutoML Deployed Model — Text Classification")
+
+CLASS_LABELS = {labels_json}
+
+# Load pipeline (TF-IDF + Classifier)
+with open("model.pkl", "rb") as f:
+    model = pickle.load(f)
+
+class TextInput(BaseModel):
+    text: str
+
+@app.get("/")
+def health_check():
+    return {{"status": "healthy", "task_type": "text_classification", "labels": CLASS_LABELS}}
+
+@app.post("/predict")
+async def predict(data: TextInput):
+    try:
+        prediction = model.predict([data.text])[0]
+        label = CLASS_LABELS[int(prediction)] if int(prediction) < len(CLASS_LABELS) else str(prediction)
+        
+        result = {{
             "success": True,
-            "prediction": class_name,
-            "confidence": confidence.item()
+            "prediction": int(prediction),
+            "label": label
         }}
+        
+        if hasattr(model, "decision_function"):
+            scores = model.decision_function([data.text])
+            if len(scores.shape) == 1:
+                result["confidence"] = round(float(abs(scores[0])), 4)
+        
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 """
@@ -205,6 +317,7 @@ def process_pending_deployment(project_id: str):
         user_id = project["user_id"]
         project_name = project["name"]
         metadata = project.get("metadata", {}) or {}
+        task_type = project.get("task_type", "image_classification")
         
         # Get Model
         model_resp = supabase.table("models").select("*").eq("project_id", project_id).execute()
@@ -218,6 +331,8 @@ def process_pending_deployment(project_id: str):
         model_architecture = model_meta.get("architecture", metadata.get("preferred_model", "resnet18"))
         num_classes = model_meta.get("num_classes", 2)
         class_labels = model_meta.get("class_labels", [f"Class_{i}" for i in range(num_classes)])
+        feature_names = model_meta.get("feature_names", [])
+        target_col = model_meta.get("target_column", "")
         
         # Normalize architecture aliases (as in MCP server)
         model_aliases = {
@@ -227,11 +342,12 @@ def process_pending_deployment(project_id: str):
         }
         model_architecture = model_aliases.get(model_architecture.lower(), model_architecture.lower())
         
-        log_to_supabase(project_id, "Generating Docker deployment package...", "info")
+        log_to_supabase(project_id, f"Generating deployment package (task_type={task_type})...", "info")
         send_chat_message(user_id, "🐳 Packaging your AI model into a production-ready Docker container...")
         
         with tempfile.TemporaryDirectory() as temp_dir:
-            bundle_url = metadata.get("bundle_url")
+            # Download bundle or model
+            bundle_url = model_meta.get("bundle_url") or metadata.get("bundle_url")
             if bundle_url:
                 log_to_supabase(project_id, f"Downloading evaluation bundle from {bundle_url}...", "info")
                 bundle_path = os.path.join(temp_dir, "bundle.zip")
@@ -240,14 +356,28 @@ def process_pending_deployment(project_id: str):
                     zf.extractall(temp_dir)
                 os.remove(bundle_path)
             else:
-                model_path = os.path.join(temp_dir, "model.pth")
+                # Download model directly
+                if task_type in ("tabular_classification", "tabular_regression", "text_classification"):
+                    model_path = os.path.join(temp_dir, "model.pkl")
+                else:
+                    model_path = os.path.join(temp_dir, "model.pth")
                 log_to_supabase(project_id, f"Downloading model from {model_gcs_url}...", "info")
                 download_from_gcs(model_gcs_url, model_path)
             
-            # Generate deployment files
-            dockerfile_content = generate_dockerfile()
-            requirements_content = generate_requirements()
-            app_content = generate_app_py(model_architecture, num_classes, class_labels)
+            # Generate deployment files based on task type
+            if task_type in ("tabular_classification", "tabular_regression"):
+                dockerfile_content = generate_sklearn_dockerfile()
+                requirements_content = generate_sklearn_requirements()
+                app_content = generate_tabular_app_py(feature_names, class_labels, target_col, task_type)
+            elif task_type == "text_classification":
+                dockerfile_content = generate_sklearn_dockerfile()
+                requirements_content = generate_sklearn_requirements()
+                app_content = generate_text_app_py(class_labels)
+            else:
+                # Image classification (original)
+                dockerfile_content = generate_dockerfile()
+                requirements_content = generate_requirements()
+                app_content = generate_app_py(model_architecture, num_classes, class_labels)
             
             with open(os.path.join(temp_dir, "Dockerfile"), "w") as f:
                 f.write(dockerfile_content)
