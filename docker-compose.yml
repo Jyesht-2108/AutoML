@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env.docker
+    environment:
+      - MCP_SERVER_URL=http://mcp_server:8000
+    depends_on:
+      - mcp_server
+    restart: unless-stopped
+
+  mcp_server:
+    build:
+      context: ./mcp_server
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env.docker
+    volumes:
+      - ./credentials:/app/credentials
+    restart: unless-stopped
+
+  planner-agent:
+    build:
+      context: ./Planner-Agent/agent
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env.docker
+    restart: unless-stopped
+
+  dataset-agent:
+    build:
+      context: ./Dataset-Agent/agent
+      dockerfile: Dockerfile
+    ports:
+      - "8002:8002"
+    env_file:
+      - .env.docker
+    volumes:
+      - ./credentials:/app/credentials
+    restart: unless-stopped
+
+  trainer-agent:
+    build:
+      context: ./Trainer-Agent/agent
+      dockerfile: Dockerfile
+    ports:
+      - "8003:8003"
+    env_file:
+      - .env.docker
+    volumes:
+      - ./credentials:/app/credentials
+    restart: unless-stopped
+
+  sanity-agent:
+    build:
+      context: ./Sanity-Agent/agent
+      dockerfile: Dockerfile
+    ports:
+      - "8004:8004"
+    env_file:
+      - .env.docker
+    restart: unless-stopped
+
+  privacy-agent:
+    build:
+      context: ./Privacy-Agent/agent
+      dockerfile: Dockerfile
+    ports:
+      - "8005:8005"
+    env_file:
+      - .env.docker
+    restart: unless-stopped
+
+  deployment-agent:
+    build:
+      context: ./Deployment-Agent/agent
+      dockerfile: Dockerfile
+    ports:
+      - "8007:8007"
+    env_file:
+      - .env.docker
+    volumes:
+      - ./credentials:/app/credentials
+    restart: unless-stopped
