@@ -29,7 +29,7 @@ services:
 
   planner-agent:
     build:
-      context: ./Planner-Agent/agent
+      context: ./Planner-Agent/agent/planner
       dockerfile: Dockerfile
     ports:
       - "8001:8001"
@@ -39,7 +39,7 @@ services:
 
   dataset-agent:
     build:
-      context: ./Dataset-Agent/agent
+      context: ./Dataset_Agent/agents/dataset
       dockerfile: Dockerfile
     ports:
       - "8002:8002"
