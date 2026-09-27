@@ -62,8 +62,10 @@ const MLProjectsPage = ({ user }) => {
       'pending_training_config': { active: 'training', completed: ['planner', 'dataset', 'sanity', 'privacy'] },
       'pending_training': { active: 'training', completed: ['planner', 'dataset', 'sanity', 'privacy'] },
       'pending_evaluation': { active: 'evaluation', completed: ['planner', 'dataset', 'sanity', 'privacy', 'training'] },
-      'completed': { active: null, completed: ['planner', 'dataset', 'sanity', 'privacy', 'training', 'evaluation'] },
-      'export_ready': { active: null, completed: ['planner', 'dataset', 'sanity', 'privacy', 'training', 'evaluation'] }
+      'pending_deployment': { active: 'deployment', completed: ['planner', 'dataset', 'sanity', 'privacy', 'training', 'evaluation'] },
+      'deploying': { active: 'deployment', completed: ['planner', 'dataset', 'sanity', 'privacy', 'training', 'evaluation'] },
+      'completed': { active: null, completed: ['planner', 'dataset', 'sanity', 'privacy', 'training', 'evaluation', 'deployment'] },
+      'export_ready': { active: null, completed: ['planner', 'dataset', 'sanity', 'privacy', 'training', 'evaluation', 'deployment'] }
     };
     return stages[status] || stages['draft'];
   };
@@ -75,7 +77,8 @@ const MLProjectsPage = ({ user }) => {
       { name: 'Dataset', icon: <Database size={20} />, key: 'dataset' },
       { name: 'Sanity', icon: <ShieldCheck size={20} />, key: 'sanity' },
       { name: 'Training', icon: <Cpu size={20} />, key: 'training' },
-      { name: 'Evaluation', icon: <BarChart size={20} />, key: 'evaluation' }
+      { name: 'Evaluation', icon: <BarChart size={20} />, key: 'evaluation' },
+      { name: 'Deploy', icon: <Activity size={20} />, key: 'deployment' }
     ];
 
     return (
@@ -305,13 +308,14 @@ const MLProjectsPage = ({ user }) => {
                             <strong>Includes:</strong>
                             <ul className="mb-0 mt-1" style={{ paddingLeft: '20px' }}>
                               <li>model.pth - Trained model weights</li>
-                              <li>predict.py - Inference script</li>
-                              <li>labels.json - Class mappings</li>
-                              <li>README.txt - Usage instructions</li>
+                              <li>Dockerfile - Container configuration</li>
+                              <li>app.py - FastAPI inference server</li>
+                              <li>requirements.txt - Server dependencies</li>
+                              <li>metadata.json & README.md - AI Justification</li>
                             </ul>
                           </div>
                           <small className="text-muted">
-                            Click "Download Model" to get the complete bundle
+                            Click "Download Model" to get the complete deployment package
                           </small>
                         </div>
                       </div>

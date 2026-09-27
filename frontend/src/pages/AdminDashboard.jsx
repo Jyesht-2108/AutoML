@@ -82,6 +82,8 @@ const AdminDashboard = () => {
       'pending_training_config': { bg: 'primary', icon: <Clock size={14} /> },
       'pending_training': { bg: 'warning', icon: <Clock size={14} /> },
       'pending_evaluation': { bg: 'primary', icon: <Clock size={14} /> },
+      'pending_deployment': { bg: 'info', icon: <Clock size={14} /> },
+      'deploying': { bg: 'warning', icon: <Clock size={14} /> },
       'draft': { bg: 'secondary', icon: <Clock size={14} /> }
     };
     const info = statusMap[status] || statusMap['draft'];

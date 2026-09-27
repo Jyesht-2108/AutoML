@@ -248,11 +248,11 @@ async def execute_evaluation(project_id: str) -> Dict[str, Any]:
 
         
         db_service.update_project_metadata(project_id, project_metadata)
-        db_service.update_project_status(project_id, "completed")
+        db_service.update_project_status(project_id, "pending_deployment")
         
         db_service.log_agent_activity(
             project_id,
-            "Evaluation workflow completed successfully",
+            "Evaluation workflow completed, transitioning to deployment",
             "info"
         )
         

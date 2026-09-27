@@ -367,14 +367,19 @@ async def download_model(project_id: str, user_id: str):
             raise HTTPException(status_code=400, detail="Invalid model URL format")
         
         # Extract bucket name
+        # Extract bucket name from model_url as fallback
         gcs_path = model_url.replace("gs://", "")
         bucket_name = gcs_path.split("/")[0]
         
-        # Try to find bundle first (in exports folder)
-        project_name_clean = project_data.get('name', 'model').replace(' ', '_')
-        bundle_path = f"exports/{project_name_clean}_bundle.zip"
+        # Determine the target download URL from metadata (priority: deployment > bundle > raw model)
+        metadata = project_data.get("metadata", {}) or {}
+        target_gcs_url = metadata.get("deployment_url") or metadata.get("bundle_url") or model_url
         
-        logger.info(f"Checking for bundle at: {bundle_path}")
+        target_path = target_gcs_url.replace("gs://", "")
+        target_bucket_name = target_path.split("/")[0]
+        target_blob_path = "/".join(target_path.split("/")[1:])
+        
+        logger.info(f"Targeting download URL: {target_gcs_url}")
         
         # Download from GCP with explicit credentials
         gcp_credentials_path = settings.GOOGLE_APPLICATION_CREDENTIALS
@@ -393,28 +398,21 @@ async def download_model(project_id: str, user_id: str):
             logger.error("GOOGLE_APPLICATION_CREDENTIALS not set in .env file")
             raise HTTPException(status_code=500, detail="GCP credentials not configured in .env file")
         
-        bucket = storage_client.bucket(bucket_name)
+        bucket = storage_client.bucket(target_bucket_name)
         
-        # Check if bundle exists
-        bundle_blob = bucket.blob(bundle_path)
-        if bundle_blob.exists():
-            logger.info(f"Bundle found! Downloading: {bundle_path}")
-            blob = bundle_blob
-            filename = f"{project_name_clean}_bundle.zip"
+        blob = bucket.blob(target_blob_path)
+        if not blob.exists():
+            raise HTTPException(status_code=404, detail=f"File not found in GCP storage: {target_blob_path}")
+            
+        filename = blob.name.split("/")[-1]
+        
+        if filename.endswith('.zip'):
             content_type = "application/zip"
         else:
-            # Fallback to raw model file
-            logger.info(f"Bundle not found, downloading raw model")
-            model_blob_path = "/".join(gcs_path.split("/")[1:])
-            blob = bucket.blob(model_blob_path)
-            
-            if not blob.exists():
-                raise HTTPException(status_code=404, detail="Model file not found in GCP storage")
-            
-            filename = blob.name.split("/")[-1]
-            if not filename.endswith('.pth'):
-                filename = f"{project_name_clean}_model.pth"
             content_type = "application/octet-stream"
+            if not filename.endswith('.pth'):
+                project_name_clean = project_data.get('name', 'model').replace(' ', '_')
+                filename = f"{project_name_clean}_model.pth"
         
         # Stream the file
         file_stream = io.BytesIO()

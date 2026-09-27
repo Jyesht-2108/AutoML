@@ -42,6 +42,10 @@ timeout /t 2
 
 start "Trainer Agent" cmd /k "cd Trainer-Agent\agent && venv\Scripts\activate && uvicorn main:app --reload --port 8003"
 
+timeout /t 2
+
+start "Deployment Agent" cmd /k "cd Deployment-Agent\agent && venv\Scripts\activate && uvicorn main:app --reload --port 8007"
+
 echo.
 echo ========================================
 echo All services are starting...

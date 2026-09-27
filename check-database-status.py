@@ -34,6 +34,8 @@ for p in projects.data:
         'pending_training_config': '⚙️',
         'pending_training': '🔄',
         'pending_evaluation': '📊',
+        'pending_deployment': '📦',
+        'deploying': '🐳',
         'completed': '✅',
         'failed': '❌'
     }.get(p['status'], '❓')
