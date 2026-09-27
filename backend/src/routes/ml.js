@@ -162,6 +162,31 @@ router.post('/ml/projects/:projectId/sanity-approve', verifySession, async (req,
   }
 });
 
+// Trainer Agent: Human-in-the-loop training configuration
+router.post('/ml/projects/:projectId/training-config', verifySession, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const firebaseUid = req.user.uid;
+    const config = req.body;
+
+    console.log(`Training config for project ${projectId}:`, config);
+
+    const mcpResponse = await axios.post(
+      `${MCP_SERVER_URL}/api/ml/projects/${projectId}/training-config`,
+      config,
+      { params: { user_id: firebaseUid } }
+    );
+
+    res.json(mcpResponse.data);
+  } catch (error) {
+    console.error('Error saving training config:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to save training config',
+      details: error.response?.data || error.message
+    });
+  }
+});
+
 // Admin endpoints
 router.get('/admin/stats', verifySession, async (req, res) => {
   try {

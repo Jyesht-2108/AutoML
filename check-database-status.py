@@ -28,6 +28,7 @@ for p in projects.data:
         'pending_sanity': '🔬',
         'pending_sanity_review': '👤',
         'pending_sanity_fix': '🔧',
+        'pending_training_config': '⚙️',
         'pending_training': '🔄',
         'pending_evaluation': '📊',
         'completed': '✅',

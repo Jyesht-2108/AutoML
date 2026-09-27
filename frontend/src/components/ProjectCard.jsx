@@ -43,6 +43,12 @@ const ProjectCard = ({ project, onViewDetails, onDownload }) => {
         text: 'Applying Fixes',
         progress: 40
       },
+      'pending_training_config': { 
+        color: 'primary', 
+        icon: <HourglassSplit size={16} />, 
+        text: '⚙️ Configure Training',
+        progress: 45
+      },
       'pending_training': { 
         color: 'warning', 
         icon: <HourglassSplit size={16} />, 

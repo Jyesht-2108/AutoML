@@ -747,6 +747,59 @@ async def approve_sanity_actions(project_id: str, payload: SanityApprovalPayload
         raise HTTPException(status_code=500, detail=f"Failed to forward sanity approval: {str(e)}")
 
 
+# --- Trainer Agent: Human-in-the-Loop Config ---
+
+class TrainingConfigPayload(BaseModel):
+    model: str
+    epochs: int
+    learning_rate: float
+    batch_size: int
+
+@app.post("/api/ml/projects/{project_id}/training-config")
+async def save_training_config(project_id: str, payload: TrainingConfigPayload, user_id: str = None):
+    """
+    Human-in-the-loop: user configures training parameters.
+    Saves to metadata and transitions to pending_training.
+    """
+    logger.info(f"Training config for project {project_id}: {payload}")
+    try:
+        from supabase_client import get_supabase_client
+        supabase = get_supabase_client()
+        
+        project_resp = supabase.table("projects").select("*").eq("id", project_id).execute()
+        if not project_resp.data:
+            raise HTTPException(status_code=404, detail="Project not found")
+            
+        project = project_resp.data[0]
+        metadata = project.get("metadata", {}) or {}
+        
+        # Update training config
+        metadata["preferred_model"] = payload.model
+        metadata["epochs"] = payload.epochs
+        metadata["learning_rate"] = payload.learning_rate
+        metadata["batch_size"] = payload.batch_size
+        
+        # Save and transition to training
+        supabase.table("projects").update({
+            "metadata": metadata,
+            "status": "pending_training",
+            "updated_at": "now()"
+        }).eq("id", project_id).execute()
+        
+        # Log activity
+        supabase.table("agent_logs").insert({
+            "project_id": project_id,
+            "agent_name": "planner",
+            "message": f"User configured training: {payload.model}, {payload.epochs} epochs",
+            "log_level": "info"
+        }).execute()
+        
+        return {"success": True, "message": "Training configuration saved"}
+    except Exception as e:
+        logger.error(f"Error saving training config: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to save training config: {str(e)}")
+
+
 # Admin Endpoints
 @app.get("/api/admin/stats")
 async def get_admin_stats(user_id: str):

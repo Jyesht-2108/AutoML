@@ -5,6 +5,7 @@ import MLChatBot from '../components/MLChatBot';
 import ProjectList from '../components/ProjectList';
 import AgentLogsViewer from '../components/AgentLogsViewer';
 import SanityReviewPanel from '../components/SanityReviewPanel';
+import TrainingConfigPanel from '../components/TrainingConfigPanel';
 import { downloadModel } from '../services/mlApi';
 import { 
   Download, 
@@ -53,6 +54,7 @@ const MLProjectsPage = ({ user }) => {
       'pending_sanity': { active: 'sanity', completed: ['planner', 'dataset'] },
       'pending_sanity_review': { active: 'sanity', completed: ['planner', 'dataset'] },
       'pending_sanity_fix': { active: 'sanity', completed: ['planner', 'dataset'] },
+      'pending_training_config': { active: 'training', completed: ['planner', 'dataset', 'sanity'] },
       'pending_training': { active: 'training', completed: ['planner', 'dataset', 'sanity'] },
       'pending_evaluation': { active: 'evaluation', completed: ['planner', 'dataset', 'sanity', 'training'] },
       'completed': { active: null, completed: ['planner', 'dataset', 'sanity', 'training', 'evaluation'] },
@@ -324,6 +326,20 @@ const MLProjectsPage = ({ user }) => {
                       <SanityReviewPanel 
                         project={selectedProject}
                         onApproved={() => {
+                          setShowDetailsModal(false);
+                          setRefreshTrigger(prev => prev + 1);
+                        }}
+                      />
+                    </div>
+                  </Tab>
+                )}
+                
+                {selectedProject.status === 'pending_training_config' && (
+                  <Tab eventKey="config" title="⚙️ Training Config" className="position-relative">
+                    <div className="mt-3">
+                      <TrainingConfigPanel 
+                        project={selectedProject}
+                        onConfigSaved={() => {
                           setShowDetailsModal(false);
                           setRefreshTrigger(prev => prev + 1);
                         }}

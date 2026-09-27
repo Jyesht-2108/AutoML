@@ -59,4 +59,9 @@ export const approveSanityActions = (projectId, actions) => {
   return mlApi.post(`/api/ml/projects/${projectId}/sanity-approve`, { actions });
 };
 
+// Trainer Agent: save training configuration (Human-in-the-Loop)
+export const saveTrainingConfig = (projectId, config) => {
+  return mlApi.post(`/api/ml/projects/${projectId}/training-config`, config);
+};
+
 export default mlApi;
