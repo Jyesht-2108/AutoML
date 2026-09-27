@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 GCP_CREDENTIALS = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
 GCP_BUCKET_NAME = os.environ.get("GCP_BUCKET_NAME")
 
@@ -231,9 +231,18 @@ def process_pending_deployment(project_id: str):
         send_chat_message(user_id, "🐳 Packaging your AI model into a production-ready Docker container...")
         
         with tempfile.TemporaryDirectory() as temp_dir:
-            model_path = os.path.join(temp_dir, "model.pth")
-            log_to_supabase(project_id, f"Downloading model from {model_gcs_url}...", "info")
-            download_from_gcs(model_gcs_url, model_path)
+            bundle_url = metadata.get("bundle_url")
+            if bundle_url:
+                log_to_supabase(project_id, f"Downloading evaluation bundle from {bundle_url}...", "info")
+                bundle_path = os.path.join(temp_dir, "bundle.zip")
+                download_from_gcs(bundle_url, bundle_path)
+                with zipfile.ZipFile(bundle_path, 'r') as zf:
+                    zf.extractall(temp_dir)
+                os.remove(bundle_path)
+            else:
+                model_path = os.path.join(temp_dir, "model.pth")
+                log_to_supabase(project_id, f"Downloading model from {model_gcs_url}...", "info")
+                download_from_gcs(model_gcs_url, model_path)
             
             # Generate deployment files
             dockerfile_content = generate_dockerfile()
@@ -255,10 +264,11 @@ def process_pending_deployment(project_id: str):
             zip_path = os.path.join(tempfile.gettempdir(), zip_filename)
             
             with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-                zf.write(os.path.join(temp_dir, "model.pth"), "model.pth")
-                zf.write(os.path.join(temp_dir, "Dockerfile"), "Dockerfile")
-                zf.write(os.path.join(temp_dir, "requirements.txt"), "requirements.txt")
-                zf.write(os.path.join(temp_dir, "app.py"), "app.py")
+                for root, _, files in os.walk(temp_dir):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        arcname = os.path.relpath(file_path, temp_dir)
+                        zf.write(file_path, arcname)
                 
             log_to_supabase(project_id, "Uploading deployment package to GCP...", "info")
             gcs_dest_path = f"deployments/{project_id}/{zip_filename}"
