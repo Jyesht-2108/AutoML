@@ -322,6 +322,19 @@ const ModelTester = ({ isAdmin = false }) => {
                         </span>
                       </div>
                     )}
+
+                    {result.heatmap_base64 && (
+                      <div className="mt-3 p-3" style={{ background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                        <span style={{ color: '#374151', fontWeight: '600', display: 'block', marginBottom: '10px' }}>
+                          Explainable AI (Grad-CAM):
+                        </span>
+                        <img 
+                          src={result.heatmap_base64} 
+                          alt="Grad-CAM Heatmap" 
+                          style={{ width: '100%', borderRadius: '8px' }}
+                        />
+                      </div>
+                    )}
                   </Card.Body>
                 </Card>
               </motion.div>

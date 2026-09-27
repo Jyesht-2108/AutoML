@@ -440,6 +440,60 @@ async def download_model(project_id: str, user_id: str):
         logger.error(f"Full traceback:\n{error_trace}")
         raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
 
+class GradCAM:
+    """Simple hook-based Grad-CAM implementation for PyTorch CNNs."""
+    def __init__(self, model):
+        self.model = model
+        self.gradients = None
+        self.activations = None
+        import torch
+        self.target_layer = self._find_target_layer(torch)
+        if self.target_layer:
+            self.target_layer.register_forward_hook(self.save_activation)
+            self.target_layer.register_full_backward_hook(self.save_gradient)
+
+    def _find_target_layer(self, torch):
+        target = None
+        for module in self.model.modules():
+            if isinstance(module, torch.nn.Conv2d):
+                target = module
+        return target
+
+    def save_activation(self, module, input, output):
+        self.activations = output
+
+    def save_gradient(self, module, grad_input, grad_output):
+        self.gradients = grad_output[0]
+
+    def generate(self, input_tensor, target_class=None):
+        if not self.target_layer:
+            return None
+            
+        import numpy as np
+        self.model.zero_grad()
+        output = self.model(input_tensor)
+        
+        if target_class is None:
+            target_class = output.argmax(dim=1).item()
+            
+        target = output[0, target_class]
+        target.backward()
+        
+        gradients = self.gradients.detach().cpu().numpy()[0]
+        activations = self.activations.detach().cpu().numpy()[0]
+        
+        weights = np.mean(gradients, axis=(1, 2))
+        
+        cam = np.zeros(activations.shape[1:], dtype=np.float32)
+        for i, w in enumerate(weights):
+            cam += w * activations[i]
+            
+        cam = np.maximum(cam, 0)
+        if np.max(cam) > 0:
+            cam = cam - np.min(cam)
+            cam = cam / np.max(cam)
+        return cam
+
 @app.post("/api/ml/projects/{project_id}/test")
 async def test_model(project_id: str, user_id: str = Form(...), file: UploadFile = File(...)):
     """
@@ -685,7 +739,47 @@ async def test_model(project_id: str, user_id: str = Form(...), file: UploadFile
         
         img_tensor = transform(image).unsqueeze(0).to(device)
         
-        # Run inference
+        # Run inference and Grad-CAM
+        model.eval()
+        grad_cam = GradCAM(model)
+        
+        # Calculate Grad-CAM BEFORE torch.no_grad()
+        heatmap_base64 = None
+        try:
+            if grad_cam.target_layer:
+                heatmap = grad_cam.generate(img_tensor)
+                
+                if heatmap is not None:
+                    import cv2
+                    import numpy as np
+                    import base64
+                    
+                    # Prepare display image
+                    img_display = img_tensor[0].cpu().numpy().transpose(1, 2, 0)
+                    mean = np.array([0.485, 0.456, 0.406])
+                    std = np.array([0.229, 0.224, 0.225])
+                    img_display = std * img_display + mean
+                    img_display = np.clip(img_display, 0, 1)
+                    
+                    # Resize heatmap
+                    heatmap = cv2.resize(heatmap, (img_display.shape[1], img_display.shape[0]))
+                    heatmap = np.uint8(255 * heatmap)
+                    heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+                    heatmap = np.float32(heatmap) / 255
+                    heatmap = heatmap[:, :, ::-1] # BGR to RGB
+                    
+                    cam_result = heatmap * 0.4 + img_display * 0.6
+                    cam_result = np.clip(cam_result, 0, 1)
+                    
+                    # Convert to base64
+                    cam_result_uint8 = np.uint8(255 * cam_result)
+                    cam_result_bgr = cam_result_uint8[:, :, ::-1] # RGB to BGR for cv2
+                    _, buffer = cv2.imencode('.jpg', cam_result_bgr)
+                    heatmap_base64 = "data:image/jpeg;base64," + base64.b64encode(buffer).decode('utf-8')
+        except Exception as e:
+            logger.warning(f"Grad-CAM generation failed: {e}")
+
+        # Final inference
         with torch.no_grad():
             outputs = model(img_tensor)
             probabilities = torch.nn.functional.softmax(outputs, dim=1)
@@ -707,7 +801,8 @@ async def test_model(project_id: str, user_id: str = Form(...), file: UploadFile
             "prediction": predicted_class,
             "class": predicted_class,
             "confidence": confidence_score,
-            "class_index": predicted_class_idx
+            "class_index": predicted_class_idx,
+            "heatmap_base64": heatmap_base64
         }
         
     except HTTPException:
