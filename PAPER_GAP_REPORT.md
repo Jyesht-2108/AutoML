@@ -10,7 +10,7 @@ The research paper describes a **7-agent ecosystem**, but the current codebase o
 - ✅ **Planner Agent**: Implemented and functioning (Parses user intent, initializes project state in Supabase).
 - ✅ **Dataset Agent**: Implemented and functioning (Fetches dataset from Kaggle, uploads to GCP).
 - 🔄 **Trainer Agent**: Implemented but seems to still be undergoing integration/testing. Runs PyTorch templates.
-- 🔄 **Evaluation Agent**: Code exists as a service inside the `Trainer-Agent` (`evaluation_service.py`), but the paper describes it as a standalone agent. Currently, it evaluates accuracy but lacks the native Grad-CAM Explainable AI (XAI) feature mentioned in the paper.
+- 🔄 **Evaluation Agent**: Code exists as a service inside the `Trainer-Agent` (`evaluation_service.py`), but the paper describes it as a standalone agent. It currently evaluates accuracy and natively generates **Grad-CAM Explainable AI (XAI)** heatmaps as mentioned in the paper, but it needs to be decoupled into its own independent microservice.
 
 ### Missing Agents (To Be Implemented)
 - ❌ **Data Sanity Auditor (Phase 1)**: Missing. Supposed to detect class imbalances, corrupted files, and statistical anomalies before training.
@@ -35,7 +35,7 @@ To adhere to the paper's architecture, the workflow pipeline (managed by Supabas
 
 ### 3. Evaluation Agent (Extraction & Enhancement)
 - **When**: After Training Agent completes (`pending_evaluation`).
-- **Implementation (How)**: Decouple `evaluation_service.py` from `Trainer-Agent` into its own standalone agent (Port 8004). Add **Grad-CAM** hooks (via `torch-cam`) to generate and upload explainability heatmaps for image classification tasks.
+- **Implementation (How)**: Decouple `evaluation_service.py` from `Trainer-Agent` into its own standalone agent (Port 8004). (Grad-CAM hook logic is already implemented, it just needs to be isolated into a dedicated Docker container).
 
 ### 4. Deployment Agent
 - **When**: Executes after the **Evaluation Agent** completes.
