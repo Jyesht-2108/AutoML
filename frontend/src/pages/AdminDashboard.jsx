@@ -51,17 +51,11 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleDownloadModel = async (project) => {
+  const handleDownloadModel = (project) => {
     try {
-      const response = await downloadModel(project.id);
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `${project.name}_model.zip`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      const downloadUrl = `${import.meta.env.VITE_API_BASE_URL}/api/ml/projects/${project.id}/download`;
+      // Use window.open to let the browser handle the streaming download natively
+      window.open(downloadUrl, '_blank');
     } catch (error) {
       console.error('Error downloading model:', error);
       alert('Failed to download model. Please try again.');

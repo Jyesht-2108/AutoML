@@ -428,7 +428,7 @@ const Dashboard = ({ user }) => {
                 </span>
               }
             >
-              <MLProjectsPage user={user} />
+              <MLProjectsPage user={user} refreshTriggerFromParent={activeTab === 'ml-projects' ? Date.now() : 0} />
             </Tab>
 
             <Tab 
@@ -464,7 +464,9 @@ const Dashboard = ({ user }) => {
                 transition={{ duration: 0.3 }}
                 className="py-3"
               >
-                <DatasetUploader user={user} onProjectCreated={() => setActiveTab('ml-projects')} />
+                <DatasetUploader user={user} onProjectCreated={() => {
+                  setActiveTab('ml-projects');
+                }} />
               </motion.div>
             </Tab>
 

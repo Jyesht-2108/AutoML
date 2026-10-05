@@ -10,6 +10,7 @@ import json
 import shutil
 import zipfile
 import torch
+import numpy as np
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
@@ -331,7 +332,7 @@ def evaluate_model(
         test_dataset,
         batch_size=64,
         shuffle=False,
-        num_workers=4
+        num_workers=0
     )
     
     num_classes = len(test_dataset.classes)

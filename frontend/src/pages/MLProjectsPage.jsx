@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Modal, Button, Tab, Tabs, Badge } from 'react-bootstrap';
 import { motion } from 'framer-motion';
 import MLChatBot from '../components/MLChatBot';
@@ -16,13 +16,20 @@ import {
   Database,
   Cpu,
   BarChart,
-  ShieldCheck
+  ShieldCheck,
+  ShieldLock
 } from 'react-bootstrap-icons';
 
-const MLProjectsPage = ({ user }) => {
+const MLProjectsPage = ({ user, refreshTriggerFromParent }) => {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [selectedProject, setSelectedProject] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+
+  useEffect(() => {
+    if (refreshTriggerFromParent) {
+      setRefreshTrigger(refreshTriggerFromParent);
+    }
+  }, [refreshTriggerFromParent]);
 
   const handleProjectCreated = () => {
     setRefreshTrigger(prev => prev + 1);
@@ -33,16 +40,11 @@ const MLProjectsPage = ({ user }) => {
     setShowDetailsModal(true);
   };
 
-  const handleDownload = async (project) => {
+  const handleDownload = (project) => {
     try {
-      const response = await downloadModel(project.id);
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `${project.name}_model.zip`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      const downloadUrl = `${import.meta.env.VITE_API_BASE_URL}/api/ml/projects/${project.id}/download`;
+      // Use window.open to let the browser handle the streaming download natively
+      window.open(downloadUrl, '_blank');
     } catch (error) {
       console.error('Error downloading model:', error);
       alert('Failed to download model. Please try again.');
@@ -61,6 +63,7 @@ const MLProjectsPage = ({ user }) => {
       'pending_privacy_fix': { active: 'privacy', completed: ['planner', 'dataset', 'sanity'] },
       'pending_training_config': { active: 'training', completed: ['planner', 'dataset', 'sanity', 'privacy'] },
       'pending_training': { active: 'training', completed: ['planner', 'dataset', 'sanity', 'privacy'] },
+      'training': { active: 'training', completed: ['planner', 'dataset', 'sanity', 'privacy'] },
       'pending_evaluation': { active: 'evaluation', completed: ['planner', 'dataset', 'sanity', 'privacy', 'training'] },
       'pending_deployment': { active: 'deployment', completed: ['planner', 'dataset', 'sanity', 'privacy', 'training', 'evaluation'] },
       'deploying': { active: 'deployment', completed: ['planner', 'dataset', 'sanity', 'privacy', 'training', 'evaluation'] },
@@ -76,6 +79,7 @@ const MLProjectsPage = ({ user }) => {
       { name: 'Planner', icon: <Activity size={20} />, key: 'planner' },
       { name: 'Dataset', icon: <Database size={20} />, key: 'dataset' },
       { name: 'Sanity', icon: <ShieldCheck size={20} />, key: 'sanity' },
+      { name: 'Privacy', icon: <ShieldLock size={20} />, key: 'privacy' },
       { name: 'Training', icon: <Cpu size={20} />, key: 'training' },
       { name: 'Evaluation', icon: <BarChart size={20} />, key: 'evaluation' },
       { name: 'Deploy', icon: <Activity size={20} />, key: 'deployment' }

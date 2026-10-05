@@ -145,18 +145,15 @@ class ModelTrainer:
         val_dataset = datasets.ImageFolder(val_dir, transform=val_transform)
         
         # Create data loaders with optimized settings
-        # Use more workers for faster data loading (prevents GPU starvation)
-        num_workers = 6  # Increased for M3 (8-core CPU can handle it)
-        pin_memory = self.device.type == 'cuda'  # Only CUDA supports pin_memory
+        num_workers = 0  # Set to 0 for Docker on Windows to prevent IPC deadlocks
+        pin_memory = False # self.device.type == 'cuda'
         
         self.train_loader = DataLoader(
             train_dataset,
             batch_size=self.batch_size,
             shuffle=True,
             num_workers=num_workers,
-            pin_memory=pin_memory,
-            persistent_workers=True if num_workers > 0 else False,
-            prefetch_factor=2  # Prefetch 2 batches per worker
+            pin_memory=pin_memory
         )
         
         self.val_loader = DataLoader(
@@ -164,9 +161,7 @@ class ModelTrainer:
             batch_size=self.batch_size * 2,  # Larger batch for validation (no gradients)
             shuffle=False,
             num_workers=num_workers,
-            pin_memory=pin_memory,
-            persistent_workers=True if num_workers > 0 else False,
-            prefetch_factor=2
+            pin_memory=pin_memory
         )
         
         return self.train_loader, self.val_loader

@@ -70,6 +70,12 @@ const ProjectCard = ({ project, onViewDetails, onDownload }) => {
       'pending_training': { 
         color: 'warning', 
         icon: <HourglassSplit size={16} />, 
+        text: 'Waiting for Trainer',
+        progress: 50
+      },
+      'training': { 
+        color: 'warning', 
+        icon: <HourglassSplit size={16} />, 
         text: 'Training Model',
         progress: 55
       },
@@ -78,6 +84,18 @@ const ProjectCard = ({ project, onViewDetails, onDownload }) => {
         icon: <HourglassSplit size={16} />, 
         text: 'Evaluating',
         progress: 75
+      },
+      'pending_deployment': { 
+        color: 'info', 
+        icon: <HourglassSplit size={16} />, 
+        text: 'Preparing Deployment',
+        progress: 85
+      },
+      'deploying': { 
+        color: 'primary', 
+        icon: <HourglassSplit size={16} />, 
+        text: 'Deploying',
+        progress: 90
       },
       'completed': { 
         color: 'success', 

@@ -36,7 +36,7 @@ import shutil
 import zipfile
 import math
 import traceback
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from collections import Counter
 from pathlib import Path
 import threading
@@ -101,7 +101,7 @@ def log_to_supabase(project_id: str, message: str, level: str = "info"):
             "agent_name": AGENT_NAME,
             "message": message,
             "log_level": level,
-            "created_at": datetime.now(UTC).isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }).execute()
     except Exception as e:
         print(f"[SANITY] Failed to log: {e}")
@@ -113,7 +113,7 @@ def send_chat_message(user_id: str, content: str):
             "user_id": user_id,
             "role": "assistant",
             "content": content,
-            "created_at": datetime.now(UTC).isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }).execute()
     except Exception as e:
         print(f"[SANITY] Failed to send chat message: {e}")
@@ -908,7 +908,7 @@ def process_audit(project_id: str):
         if not dataset_resp.data:
             log_to_supabase(project_id, "No dataset found", "error")
             supabase.table("projects").update({
-                "status": "failed", "updated_at": datetime.now(UTC).isoformat(),
+                "status": "failed", "updated_at": datetime.now(timezone.utc).isoformat(),
             }).eq("id", project_id).execute()
             send_chat_message(user_id, "❌ Sanity check failed: No dataset found.")
             return
@@ -917,7 +917,7 @@ def process_audit(project_id: str):
         if not gcs_url:
             log_to_supabase(project_id, "Dataset has no GCS URL", "error")
             supabase.table("projects").update({
-                "status": "failed", "updated_at": datetime.now(UTC).isoformat(),
+                "status": "failed", "updated_at": datetime.now(timezone.utc).isoformat(),
             }).eq("id", project_id).execute()
             return
 
@@ -936,7 +936,7 @@ def process_audit(project_id: str):
             except zipfile.BadZipFile:
                 log_to_supabase(project_id, "Dataset archive is corrupted", "error")
                 supabase.table("projects").update({
-                    "status": "failed", "updated_at": datetime.now(UTC).isoformat(),
+                    "status": "failed", "updated_at": datetime.now(timezone.utc).isoformat(),
                 }).eq("id", project_id).execute()
                 send_chat_message(user_id, "❌ Sanity check failed: Archive is corrupted.")
                 return
@@ -979,7 +979,7 @@ def process_audit(project_id: str):
             supabase.table("projects").update({
                 "metadata": metadata,
                 "status": "failed",
-                "updated_at": datetime.now(UTC).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }).eq("id", project_id).execute()
             error_text = "\n".join(f"  • {e}" for e in report["errors"])
             send_chat_message(user_id,
@@ -992,7 +992,7 @@ def process_audit(project_id: str):
             supabase.table("projects").update({
                 "metadata": metadata,
                 "status": "pending_sanity_review",
-                "updated_at": datetime.now(UTC).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }).eq("id", project_id).execute()
 
             # Build user message listing proposed actions
@@ -1014,7 +1014,7 @@ def process_audit(project_id: str):
             supabase.table("projects").update({
                 "metadata": metadata,
                 "status": "pending_privacy",
-                "updated_at": datetime.now(UTC).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }).eq("id", project_id).execute()
             send_chat_message(user_id,
                 f"✅ Data Sanity Check Passed!\n"
@@ -1028,7 +1028,7 @@ def process_audit(project_id: str):
         log_to_supabase(project_id, f"Audit error: {str(exc)}", "error")
         try:
             supabase.table("projects").update({
-                "status": "failed", "updated_at": datetime.now(UTC).isoformat(),
+                "status": "failed", "updated_at": datetime.now(timezone.utc).isoformat(),
             }).eq("id", project_id).execute()
         except Exception:
             pass
@@ -1054,7 +1054,7 @@ def process_fix(project_id: str):
             log_to_supabase(project_id, "User skipped all fixes — advancing to privacy", "info")
             supabase.table("projects").update({
                 "status": "pending_privacy",
-                "updated_at": datetime.now(UTC).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }).eq("id", project_id).execute()
             send_chat_message(user_id, "⏭️ Sanity fixes skipped. Proceeding to Privacy Agent...")
             return
@@ -1066,7 +1066,7 @@ def process_fix(project_id: str):
         if not dataset_resp.data:
             log_to_supabase(project_id, "No dataset found for fixes", "error")
             supabase.table("projects").update({
-                "status": "failed", "updated_at": datetime.now(UTC).isoformat(),
+                "status": "failed", "updated_at": datetime.now(timezone.utc).isoformat(),
             }).eq("id", project_id).execute()
             return
 
@@ -1137,7 +1137,7 @@ def process_fix(project_id: str):
         supabase.table("projects").update({
             "metadata": metadata,
             "status": "pending_privacy",
-            "updated_at": datetime.now(UTC).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
         }).eq("id", project_id).execute()
 
         # Build user summary
@@ -1155,7 +1155,7 @@ def process_fix(project_id: str):
         log_to_supabase(project_id, f"Fix error: {str(exc)}", "error")
         try:
             supabase.table("projects").update({
-                "status": "failed", "updated_at": datetime.now(UTC).isoformat(),
+                "status": "failed", "updated_at": datetime.now(timezone.utc).isoformat(),
             }).eq("id", project_id).execute()
         except Exception:
             pass
@@ -1246,7 +1246,7 @@ async def approve_sanity_actions(req: SanityApprovalRequest):
         supabase.table("projects").update({
             "metadata": metadata,
             "status": "pending_sanity_fix",
-            "updated_at": datetime.now(UTC).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
         }).eq("id", req.project_id).execute()
         log_to_supabase(req.project_id, f"User approved actions: {req.actions}", "info")
         return {"success": True, "message": "Fix phase triggered", "status": "pending_sanity_fix"}
@@ -1255,7 +1255,7 @@ async def approve_sanity_actions(req: SanityApprovalRequest):
         supabase.table("projects").update({
             "metadata": metadata,
             "status": "pending_privacy",
-            "updated_at": datetime.now(UTC).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
         }).eq("id", req.project_id).execute()
         log_to_supabase(req.project_id, "User skipped all fixes — advancing to privacy", "info")
         return {"success": True, "message": "Skipped fixes — advancing to privacy", "status": "pending_privacy"}

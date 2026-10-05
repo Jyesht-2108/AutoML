@@ -28,7 +28,7 @@ import os
 import tempfile
 import zipfile
 import traceback
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from pathlib import Path
 import threading
 import cv2
@@ -440,7 +440,7 @@ def process_pending_privacy(project_id: str):
                 supabase.table("projects").update({
                     "metadata": metadata,
                     "status": "pending_privacy_review",
-                    "updated_at": datetime.now(UTC).isoformat(),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
                 }).eq("id", project_id).execute()
                 
                 action_lines = [f"  • {a['description']}" for a in proposed.values()]
@@ -455,7 +455,7 @@ def process_pending_privacy(project_id: str):
                 supabase.table("projects").update({
                     "metadata": metadata,
                     "status": "pending_training_config",
-                    "updated_at": datetime.now(UTC).isoformat(),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
                 }).eq("id", project_id).execute()
                 
                 send_chat_message(user_id,
@@ -492,7 +492,7 @@ def process_pending_privacy_fix(project_id: str):
             log_to_supabase(project_id, "User skipped privacy masking — advancing to training config", "info")
             supabase.table("projects").update({
                 "status": "pending_training_config",
-                "updated_at": datetime.now(UTC).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }).eq("id", project_id).execute()
             send_chat_message(user_id, "⏭️ Privacy masking skipped. Please configure training settings...")
             return
@@ -542,7 +542,7 @@ def process_pending_privacy_fix(project_id: str):
         supabase.table("projects").update({
             "metadata": metadata,
             "status": "pending_training_config",
-            "updated_at": datetime.now(UTC).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
         }).eq("id", project_id).execute()
         
         send_chat_message(user_id,
@@ -619,7 +619,7 @@ def approve_privacy_actions(req: PrivacyApprovalRequest):
             supabase.table("projects").update({
                 "metadata": metadata,
                 "status": "pending_privacy_fix",
-                "updated_at": datetime.now(UTC).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }).eq("id", req.project_id).execute()
             log_to_supabase(req.project_id, f"User approved actions: {req.actions}", "info")
             return {"success": True, "message": "Fix phase triggered", "status": "pending_privacy_fix"}
@@ -628,7 +628,7 @@ def approve_privacy_actions(req: PrivacyApprovalRequest):
             supabase.table("projects").update({
                 "metadata": metadata,
                 "status": "pending_training_config",
-                "updated_at": datetime.now(UTC).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }).eq("id", req.project_id).execute()
             log_to_supabase(req.project_id, "User skipped all privacy fixes", "info")
             return {"success": True, "message": "Skipped fixes", "status": "pending_training_config"}

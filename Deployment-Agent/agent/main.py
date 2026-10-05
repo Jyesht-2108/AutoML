@@ -7,7 +7,7 @@ import asyncio
 import httpx
 import tempfile
 import urllib.parse
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from typing import Dict, Any, List
 
 from fastapi import FastAPI, BackgroundTasks, HTTPException
@@ -53,7 +53,7 @@ def send_chat_message(user_id: str, message: str, sender: str = "Deployment Agen
             "user_id": user_id,
             "message": message,
             "sender": sender,
-            "timestamp": datetime.now(UTC).isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }).execute()
     except Exception as e:
         print(f"Failed to send chat message: {e}")
@@ -82,7 +82,7 @@ def generate_dockerfile() -> str:
 WORKDIR /app
 
 # Install system dependencies for OpenCV/PIL if needed
-RUN apt-get update && apt-get install -y libgl1-mesa-glx libglib2.0-0 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y libgl1 libglib2.0-0 && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
@@ -183,7 +183,7 @@ def generate_sklearn_requirements() -> str:
 uvicorn[standard]>=0.23.0
 scikit-learn>=1.3.0
 xgboost>=2.0.0
-numpy>=1.24.0
+numpy>=1.24.0,<2.0.0
 """
 
 
@@ -414,7 +414,7 @@ def process_pending_deployment(project_id: str):
             supabase.table("projects").update({
                 "status": "completed",
                 "metadata": metadata,
-                "updated_at": datetime.now(UTC).isoformat()
+                "updated_at": datetime.now(timezone.utc).isoformat()
             }).eq("id", project_id).execute()
             
             log_to_supabase(project_id, f"Deployment package ready: {deployment_url}", "info")
@@ -439,7 +439,7 @@ async def poll_supabase():
                     # Mark as deploying to prevent double-processing
                     supabase.table("projects").update({
                         "status": "deploying",
-                        "updated_at": datetime.now(UTC).isoformat()
+                        "updated_at": datetime.now(timezone.utc).isoformat()
                     }).eq("id", proj_id).execute()
                     
                     process_pending_deployment(proj_id)

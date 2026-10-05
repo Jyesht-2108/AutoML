@@ -6,11 +6,14 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-      - "5000:5000"
+      - "4000:4000"
     env_file:
       - .env.docker
     environment:
       - MCP_SERVER_URL=http://mcp_server:8000
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/serviceAccount.json
+    volumes:
+      - ./credentials:/app/credentials
     depends_on:
       - mcp_server
     restart: unless-stopped
@@ -53,12 +56,16 @@ services:
     build:
       context: ./Trainer-Agent/agent
       dockerfile: Dockerfile
+    shm_size: '2gb'
     ports:
       - "8003:8003"
+    environment:
+      - PYTHONUNBUFFERED=1
     env_file:
       - .env.docker
     volumes:
       - ./credentials:/app/credentials
+      - torch_cache:/root/.cache/torch
     restart: unless-stopped
 
   sanity-agent:
@@ -96,3 +103,6 @@ services:
     volumes:
       - ./credentials:/app/credentials
     restart: unless-stopped
+
+volumes:
+  torch_cache:

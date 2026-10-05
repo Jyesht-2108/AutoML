@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Card, Form, Button, ProgressBar, Badge, Alert, Row, Col, Spinner } from 'react-bootstrap';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -15,7 +15,7 @@ import {
 import { uploadCustomDataset } from '../services/mlApi';
 
 const MAX_FILE_SIZE_MB = 500;
-const ALLOWED_EXTENSIONS = ['.zip', '.tar.gz', '.rar'];
+const ALLOWED_EXTENSIONS = ['.zip', '.tar.gz', '.rar', '.csv'];
 
 const DatasetUploader = ({ user, onProjectCreated }) => {
   const [file, setFile] = useState(null);
@@ -31,8 +31,16 @@ const DatasetUploader = ({ user, onProjectCreated }) => {
   const [taskType, setTaskType] = useState('image_classification');
   const [preferredModel, setPreferredModel] = useState('resnet18');
   const [description, setDescription] = useState('');
+  const [runSanity, setRunSanity] = useState(false);
+  const [runPrivacy, setRunPrivacy] = useState(false);
 
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    if (taskType === 'image_classification') setPreferredModel('resnet18');
+    else if (taskType.startsWith('tabular')) setPreferredModel('random_forest');
+    else if (taskType === 'text_classification') setPreferredModel('distilbert');
+  }, [taskType]);
 
   const validateFile = (f) => {
     if (!f) return 'No file selected';
@@ -121,6 +129,8 @@ const DatasetUploader = ({ user, onProjectCreated }) => {
     formData.append('task_type', taskType);
     formData.append('preferred_model', preferredModel);
     formData.append('description', description.trim());
+    formData.append('run_sanity', runSanity);
+    formData.append('run_privacy', runPrivacy);
 
     try {
       const response = await uploadCustomDataset(formData, (progressEvent) => {
@@ -322,7 +332,7 @@ const DatasetUploader = ({ user, onProjectCreated }) => {
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept=".zip,.tar.gz,.rar"
+                      accept=".zip,.tar.gz,.rar,.csv"
                       onChange={handleInputChange}
                       style={{ display: 'none' }}
                     />
@@ -541,6 +551,9 @@ const DatasetUploader = ({ user, onProjectCreated }) => {
                             }}
                           >
                             <option value="image_classification">Image Classification</option>
+                            <option value="tabular_classification">Tabular Classification</option>
+                            <option value="tabular_regression">Tabular Regression</option>
+                            <option value="text_classification">Text Classification</option>
                           </Form.Select>
                         </Form.Group>
                       </Col>
@@ -559,15 +572,56 @@ const DatasetUploader = ({ user, onProjectCreated }) => {
                               padding: '10px 14px'
                             }}
                           >
-                            <option value="resnet18">ResNet-18 (Fast)</option>
-                            <option value="resnet34">ResNet-34 (Balanced)</option>
-                            <option value="resnet50">ResNet-50 (Accurate)</option>
-                            <option value="mobilenet_v2">MobileNet V2 (Lightweight)</option>
-                            <option value="efficientnet_b0">EfficientNet-B0 (Efficient)</option>
+                            {taskType === 'image_classification' && (
+                              <>
+                                <option value="resnet18">ResNet-18 (Fast)</option>
+                                <option value="resnet34">ResNet-34 (Balanced)</option>
+                                <option value="resnet50">ResNet-50 (Accurate)</option>
+                                <option value="mobilenet_v2">MobileNet V2 (Lightweight)</option>
+                                <option value="efficientnet_b0">EfficientNet-B0 (Efficient)</option>
+                              </>
+                            )}
+                            {taskType.startsWith('tabular') && (
+                              <>
+                                <option value="random_forest">Random Forest</option>
+                                <option value="xgboost">XGBoost</option>
+                                <option value="gradient_boosting">Gradient Boosting</option>
+                              </>
+                            )}
+                            {taskType === 'text_classification' && (
+                              <>
+                                <option value="distilbert">DistilBERT (Fast NLP)</option>
+                                <option value="tfidf_lr">TF-IDF + Logistic Regression</option>
+                              </>
+                            )}
                           </Form.Select>
                         </Form.Group>
                       </Col>
                     </Row>
+
+                    <Form.Group className="mb-4">
+                      <Form.Label className="fw-semibold d-block" style={{ fontSize: '0.9em', color: '#4b5563' }}>
+                        Optional Agent Checks
+                      </Form.Label>
+                      <div className="d-flex gap-4">
+                        <Form.Check 
+                          type="switch"
+                          id="sanity-check"
+                          label={<span style={{ fontSize: '0.9em', color: '#4b5563' }}>Run Sanity Check</span>}
+                          checked={runSanity}
+                          onChange={(e) => setRunSanity(e.target.checked)}
+                          disabled={uploading}
+                        />
+                        <Form.Check 
+                          type="switch"
+                          id="privacy-check"
+                          label={<span style={{ fontSize: '0.9em', color: '#4b5563' }}>Run Privacy Check</span>}
+                          checked={runPrivacy}
+                          onChange={(e) => setRunPrivacy(e.target.checked)}
+                          disabled={uploading}
+                        />
+                      </div>
+                    </Form.Group>
 
                     {/* Upload progress */}
                     <AnimatePresence>

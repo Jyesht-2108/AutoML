@@ -6,7 +6,7 @@ Handles user intent parsing and project plan creation using Gemini LLM
 import os
 import uuid
 import json
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from typing import Optional, List
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel, ValidationError, Field
@@ -78,7 +78,7 @@ def get_or_create_user(firebase_uid: str) -> str:
         # User doesn't exist, create new one
         new_user = supabase.table("users").insert({
             "firebase_uid": firebase_uid,
-            "created_at": datetime.now(UTC).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat()
         }).execute()
         
         return new_user.data[0]["id"]
@@ -96,7 +96,7 @@ def log_to_supabase(project_id: Optional[str], agent_name: str, message: str, lo
             "agent_name": agent_name,
             "message": message,
             "log_level": log_level,
-            "created_at": datetime.now(UTC).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat()
         }).execute()
     except Exception as e:
         print(f"Failed to log to Supabase: {e}")
@@ -208,7 +208,7 @@ def send_chat_reply(user_id: str, message: str):
             "user_id": user_id,
             "role": "assistant",
             "content": message,
-            "created_at": datetime.now(UTC).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat()
         }).execute()
     except Exception as e:
         print(f"Failed to send chat reply: {e}")
@@ -221,7 +221,7 @@ async def health_check():
     return {
         "status": "healthy",
         "agent": "planner",
-        "timestamp": datetime.now(UTC).isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 
@@ -287,8 +287,8 @@ async def handle_message(payload: PlannerInput):
                 "search_keywords": plan.search_keywords,
                 "status": "pending_dataset",
                 "metadata": plan.model_dump(),
-                "created_at": datetime.now(UTC).isoformat(),
-                "updated_at": datetime.now(UTC).isoformat()
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat()
             }).execute()
             
             project_id = result.data[0]["id"]

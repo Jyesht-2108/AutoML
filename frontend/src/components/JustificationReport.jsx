@@ -124,7 +124,9 @@ const JustificationReport = ({ metadata }) => {
                   These visual heatmaps show exactly which regions of the image the AI model looked at to make its decision. Red areas indicate high importance.
                 </p>
                 <img 
-                  src={`https://storage.googleapis.com/${metadata.gradcam_preview_url.replace('gs://', '')}`}
+                  src={metadata.gradcam_preview_url.startsWith('http') 
+                    ? metadata.gradcam_preview_url 
+                    : `https://storage.googleapis.com/${metadata.gradcam_preview_url.replace('gs://', '')}`}
                   alt="Grad-CAM Heatmaps"
                   style={{ width: '100%', borderRadius: '8px', border: '1px solid #e2e8f0' }}
                 />

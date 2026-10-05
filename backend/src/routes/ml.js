@@ -112,14 +112,16 @@ router.get('/ml/projects/:projectId/download', verifySession, async (req, res) =
     console.log(`Downloading model for project ${projectId}`);
 
     const mcpResponse = await axios.get(`${MCP_SERVER_URL}/api/ml/projects/${projectId}/download`, {
-      params: { user_id: firebaseUid },
-      responseType: 'stream'
+      params: { user_id: firebaseUid }
     });
 
-    // Forward the stream to client
-    res.setHeader('Content-Type', mcpResponse.headers['content-type'] || 'application/zip');
-    res.setHeader('Content-Disposition', mcpResponse.headers['content-disposition'] || 'attachment; filename=model.zip');
-    mcpResponse.data.pipe(res);
+    // Redirect the user's browser directly to the Google Cloud Signed URL
+    const signedUrl = mcpResponse.data?.download_url;
+    if (signedUrl) {
+      res.redirect(signedUrl);
+    } else {
+      res.status(500).json({ error: 'Failed to generate download link from storage' });
+    }
   } catch (error) {
     console.error('Error downloading model:', error.message);
     

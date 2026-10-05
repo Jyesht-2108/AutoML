@@ -414,20 +414,18 @@ async def download_model(project_id: str, user_id: str):
                 project_name_clean = project_data.get('name', 'model').replace(' ', '_')
                 filename = f"{project_name_clean}_model.pth"
         
-        # Stream the file
-        file_stream = io.BytesIO()
-        blob.download_to_file(file_stream)
-        file_stream.seek(0)
-        
-        logger.info(f"Successfully downloaded: {filename}")
-        
-        return StreamingResponse(
-            file_stream,
-            media_type=content_type,
-            headers={
-                "Content-Disposition": f"attachment; filename={filename}"
-            }
+        # Generate a Signed URL instead of downloading to memory
+        import datetime
+        signed_url = blob.generate_signed_url(
+            version="v4",
+            expiration=datetime.timedelta(minutes=15),
+            method="GET",
+            response_disposition=f'attachment; filename="{filename}"'
         )
+        
+        logger.info(f"Generated signed URL for: {filename}")
+        
+        return {"download_url": signed_url}
         
     except HTTPException:
         raise
@@ -1086,7 +1084,9 @@ async def upload_custom_dataset(
     preferred_model: str = Form("resnet18"),
     description: str = Form(""),
     user_name: str = Form(""),
-    user_email: str = Form("")
+    user_email: str = Form(""),
+    run_sanity: str = Form("false"),
+    run_privacy: str = Form("false")
 ):
     """
     Upload a custom dataset ZIP file for quick training.
@@ -1111,8 +1111,8 @@ async def upload_custom_dataset(
             raise HTTPException(status_code=400, detail="No file uploaded")
         
         filename_lower = dataset.filename.lower()
-        if not (filename_lower.endswith('.zip') or filename_lower.endswith('.tar.gz') or filename_lower.endswith('.rar')):
-            raise HTTPException(status_code=400, detail="Only .zip, .tar.gz, and .rar files are supported")
+        if not (filename_lower.endswith('.zip') or filename_lower.endswith('.tar.gz') or filename_lower.endswith('.rar') or filename_lower.endswith('.csv')):
+            raise HTTPException(status_code=400, detail="Only .zip, .tar.gz, .rar, and .csv files are supported")
         
         # 2. Get or create user
         user_uuid = get_user_uuid_from_firebase_uid(user_id)
@@ -1122,13 +1122,13 @@ async def upload_custom_dataset(
         project_data = {
             "user_id": user_uuid,
             "name": project_name,
-            "description": description or f"Custom dataset upload: {dataset.filename}",
             "task_type": task_type,
             "framework": "pytorch",
             "dataset_source": "custom_upload",
-            "search_keywords": [project_name.lower().replace(" ", "_")],
             "status": "pending_dataset",
             "metadata": {
+                "description": description or f"Custom dataset upload: {dataset.filename}",
+                "search_keywords": [project_name.lower().replace(" ", "_")],
                 "preferred_model": preferred_model,
                 "target_metric": "accuracy",
                 "target_value": 0.9,
@@ -1247,13 +1247,19 @@ async def upload_custom_dataset(
             update_metadata["class_labels"] = class_labels
             update_metadata["num_classes"] = len(class_labels)
         
+        target_status = "pending_training_config"
+        if run_sanity.lower() == "true":
+            target_status = "pending_sanity"
+        elif run_privacy.lower() == "true":
+            target_status = "pending_privacy"
+
         supabase.table("projects").update({
-            "status": "pending_training",
+            "status": target_status,
             "metadata": update_metadata,
             "updated_at": datetime.now(timezone.utc).isoformat()
         }).eq("id", project_id).execute()
         
-        logger.info(f"Project {project_id} status set to pending_training")
+        logger.info(f"Project {project_id} status set to {target_status}")
         
         supabase.table("agent_logs").insert({
             "project_id": project_id,
