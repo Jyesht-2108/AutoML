@@ -77,6 +77,17 @@ async def execute_training(project_id: str) -> Dict[str, Any]:
             db_service.log_agent_activity(project_id, error_msg, "error")
             return {"success": False, "error": error_msg}
         
+        # Route based on task_type — tabular and text have dedicated pipelines
+        task_type = project.get("task_type", "image_classification")
+        if task_type in ("tabular_classification", "tabular_regression"):
+            db_service.log_agent_activity(project_id, f"Routing to tabular training pipeline (task_type={task_type})", "info")
+            from services.tabular_training_service import execute_tabular_training
+            return await execute_tabular_training(project_id)
+        elif task_type == "text_classification":
+            db_service.log_agent_activity(project_id, f"Routing to text training pipeline (task_type={task_type})", "info")
+            from services.text_training_service import execute_text_training
+            return await execute_text_training(project_id)
+        
         # Update status to 'training' to indicate work has started
         db_service.update_project_status(project_id, "training")
         db_service.log_agent_activity(
@@ -105,6 +116,7 @@ async def execute_training(project_id: str) -> Dict[str, Any]:
         preferred_model = project_metadata.get("preferred_model", "resnet18")
         epochs = project_metadata.get("epochs", settings.default_epochs)
         learning_rate = project_metadata.get("learning_rate", settings.default_learning_rate)
+        batch_size = project_metadata.get("batch_size", settings.batch_size)
         
         # Step 3: Download dataset from GCP (Requirement 2.1, 2.4)
         gcs_url = dataset.get("gcs_url")
@@ -286,7 +298,7 @@ async def execute_training(project_id: str) -> Dict[str, Any]:
                 num_classes=num_classes,
                 epochs=epochs,
                 lr=learning_rate,
-                batch_size=settings.batch_size
+                batch_size=batch_size
             )
             
             # Prepare data loaders

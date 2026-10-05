@@ -112,14 +112,16 @@ router.get('/ml/projects/:projectId/download', verifySession, async (req, res) =
     console.log(`Downloading model for project ${projectId}`);
 
     const mcpResponse = await axios.get(`${MCP_SERVER_URL}/api/ml/projects/${projectId}/download`, {
-      params: { user_id: firebaseUid },
-      responseType: 'stream'
+      params: { user_id: firebaseUid }
     });
 
-    // Forward the stream to client
-    res.setHeader('Content-Type', mcpResponse.headers['content-type'] || 'application/zip');
-    res.setHeader('Content-Disposition', mcpResponse.headers['content-disposition'] || 'attachment; filename=model.zip');
-    mcpResponse.data.pipe(res);
+    // Redirect the user's browser directly to the Google Cloud Signed URL
+    const signedUrl = mcpResponse.data?.download_url;
+    if (signedUrl) {
+      res.redirect(signedUrl);
+    } else {
+      res.status(500).json({ error: 'Failed to generate download link from storage' });
+    }
   } catch (error) {
     console.error('Error downloading model:', error.message);
     
@@ -133,6 +135,81 @@ router.get('/ml/projects/:projectId/download', verifySession, async (req, res) =
     res.status(error.response?.status || 500).json({ 
       error: errorMessage,
       details: error.message 
+    });
+  }
+});
+
+// Sanity Agent: Human-in-the-loop approval
+router.post('/ml/projects/:projectId/sanity-approve', verifySession, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const firebaseUid = req.user.uid;
+    const { actions } = req.body;
+
+    console.log(`Sanity approval for project ${projectId}:`, actions);
+
+    const mcpResponse = await axios.post(
+      `${MCP_SERVER_URL}/api/ml/projects/${projectId}/sanity-approve`,
+      { actions },
+      { params: { user_id: firebaseUid } }
+    );
+
+    res.json(mcpResponse.data);
+  } catch (error) {
+    console.error('Error approving sanity actions:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to approve sanity actions',
+      details: error.response?.data || error.message
+    });
+  }
+});
+
+// Privacy Agent: Human-in-the-loop approval
+router.post('/ml/projects/:projectId/privacy-approve', verifySession, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const firebaseUid = req.user.uid;
+    const { actions } = req.body;
+
+    console.log(`Privacy approval for project ${projectId}:`, actions);
+
+    const mcpResponse = await axios.post(
+      `${MCP_SERVER_URL}/api/ml/projects/${projectId}/privacy-approve`,
+      { actions },
+      { params: { user_id: firebaseUid } }
+    );
+
+    res.json(mcpResponse.data);
+  } catch (error) {
+    console.error('Error approving privacy actions:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to approve privacy actions',
+      details: error.response?.data || error.message
+    });
+  }
+});
+
+// Trainer Agent: Human-in-the-loop training configuration
+router.post('/ml/projects/:projectId/training-config', verifySession, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const firebaseUid = req.user.uid;
+    const config = req.body;
+
+    console.log(`Training config for project ${projectId}:`, config);
+
+    const mcpResponse = await axios.post(
+      `${MCP_SERVER_URL}/api/ml/projects/${projectId}/training-config`,
+      config,
+      { params: { user_id: firebaseUid } }
+    );
+
+    res.json(mcpResponse.data);
+  } catch (error) {
+    console.error('Error saving training config:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to save training config',
+      details: error.response?.data || error.message
     });
   }
 });
@@ -247,6 +324,72 @@ router.post('/ml/projects/:projectId/test', verifySession, upload.single('image'
     res.status(500).json({ 
       error: 'Failed to test model',
       details: error.response?.data?.detail || error.message 
+    });
+  }
+});
+
+// Upload custom dataset for quick training
+const datasetUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 500 * 1024 * 1024 } // 500MB limit
+});
+
+router.post('/ml/upload-dataset', verifySession, datasetUpload.single('dataset'), async (req, res) => {
+  try {
+    const firebaseUid = req.user.uid;
+    const userName = req.user.name || req.user.email;
+    const userEmail = req.user.email;
+
+    console.log(`Dataset upload request from user ${firebaseUid}`);
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'No dataset file uploaded' });
+    }
+
+    const { project_name, task_type, preferred_model, description } = req.body;
+
+    if (!project_name || !project_name.trim()) {
+      return res.status(400).json({ error: 'Project name is required' });
+    }
+
+    console.log(`Uploading dataset: ${req.file.originalname} (${(req.file.size / (1024 * 1024)).toFixed(1)}MB)`);
+
+    // Forward to MCP server
+    const FormData = require('form-data');
+    const formData = new FormData();
+
+    formData.append('dataset', req.file.buffer, {
+      filename: req.file.originalname,
+      contentType: req.file.mimetype
+    });
+    formData.append('user_id', firebaseUid);
+    formData.append('project_name', project_name.trim());
+    formData.append('task_type', task_type || 'image_classification');
+    formData.append('preferred_model', preferred_model || 'resnet18');
+    formData.append('description', description || '');
+    formData.append('user_name', userName || '');
+    formData.append('user_email', userEmail || '');
+
+    const mcpResponse = await axios.post(
+      `${MCP_SERVER_URL}/api/ml/upload-dataset`,
+      formData,
+      {
+        headers: {
+          ...formData.getHeaders()
+        },
+        maxContentLength: 600 * 1024 * 1024,
+        maxBodyLength: 600 * 1024 * 1024,
+        timeout: 300000 // 5 minute timeout
+      }
+    );
+
+    console.log(`Dataset upload successful for project: ${mcpResponse.data.projectId}`);
+    res.json(mcpResponse.data);
+  } catch (error) {
+    console.error('Error uploading dataset:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to upload dataset',
+      details: error.response?.data?.detail || error.message
     });
   }
 });

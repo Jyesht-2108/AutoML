@@ -51,17 +51,11 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleDownloadModel = async (project) => {
+  const handleDownloadModel = (project) => {
     try {
-      const response = await downloadModel(project.id);
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `${project.name}_model.zip`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      const downloadUrl = `${import.meta.env.VITE_API_BASE_URL}/api/ml/projects/${project.id}/download`;
+      // Use window.open to let the browser handle the streaming download natively
+      window.open(downloadUrl, '_blank');
     } catch (error) {
       console.error('Error downloading model:', error);
       alert('Failed to download model. Please try again.');
@@ -73,8 +67,17 @@ const AdminDashboard = () => {
       'completed': { bg: 'success', icon: <CheckCircle size={14} /> },
       'failed': { bg: 'danger', icon: <XCircle size={14} /> },
       'pending_dataset': { bg: 'info', icon: <Clock size={14} /> },
+      'pending_sanity': { bg: 'info', icon: <Clock size={14} /> },
+      'pending_sanity_review': { bg: 'warning', icon: <Clock size={14} /> },
+      'pending_sanity_fix': { bg: 'info', icon: <Clock size={14} /> },
+      'pending_privacy': { bg: 'secondary', icon: <Clock size={14} /> },
+      'pending_privacy_review': { bg: 'warning', icon: <Clock size={14} /> },
+      'pending_privacy_fix': { bg: 'secondary', icon: <Clock size={14} /> },
+      'pending_training_config': { bg: 'primary', icon: <Clock size={14} /> },
       'pending_training': { bg: 'warning', icon: <Clock size={14} /> },
       'pending_evaluation': { bg: 'primary', icon: <Clock size={14} /> },
+      'pending_deployment': { bg: 'info', icon: <Clock size={14} /> },
+      'deploying': { bg: 'warning', icon: <Clock size={14} /> },
       'draft': { bg: 'secondary', icon: <Clock size={14} /> }
     };
     const info = statusMap[status] || statusMap['draft'];

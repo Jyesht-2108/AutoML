@@ -11,9 +11,10 @@ const MLChatBot = ({ user, onProjectCreated }) => {
   const chatContainerRef = useRef(null);
 
   const examplePrompts = [
-    "Train a model to classify plant diseases",
-    "Create an image classifier for skin cancer detection",
-    "Build a model to identify different types of flowers"
+    "Train a model to classify plant diseases from leaf images",
+    "Predict house prices based on area, bedrooms, and location",
+    "Build a sentiment analysis model for product reviews",
+    "Predict customer churn using account data"
   ];
 
   useEffect(() => {

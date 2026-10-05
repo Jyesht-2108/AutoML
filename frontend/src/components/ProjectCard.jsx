@@ -23,19 +23,79 @@ const ProjectCard = ({ project, onViewDetails, onDownload }) => {
         color: 'info', 
         icon: <HourglassSplit size={16} />, 
         text: 'Fetching Dataset',
-        progress: 25
+        progress: 20
+      },
+      'pending_sanity': { 
+        color: 'info', 
+        icon: <HourglassSplit size={16} />, 
+        text: 'Sanity Check',
+        progress: 30
+      },
+      'pending_sanity_review': { 
+        color: 'warning', 
+        icon: <HourglassSplit size={16} />, 
+        text: '⚡ Review Required',
+        progress: 35
+      },
+      'pending_sanity_fix': { 
+        color: 'info', 
+        icon: <HourglassSplit size={16} />, 
+        text: 'Applying Fixes',
+        progress: 35
+      },
+      'pending_privacy': { 
+        color: 'secondary', 
+        icon: <HourglassSplit size={16} />, 
+        text: 'Privacy Audit',
+        progress: 40
+      },
+      'pending_privacy_review': { 
+        color: 'warning', 
+        icon: <HourglassSplit size={16} />, 
+        text: '🛡️ Privacy Review',
+        progress: 42
+      },
+      'pending_privacy_fix': { 
+        color: 'secondary', 
+        icon: <HourglassSplit size={16} />, 
+        text: 'Masking Data',
+        progress: 44
+      },
+      'pending_training_config': { 
+        color: 'primary', 
+        icon: <HourglassSplit size={16} />, 
+        text: '⚙️ Configure Training',
+        progress: 45
       },
       'pending_training': { 
         color: 'warning', 
         icon: <HourglassSplit size={16} />, 
-        text: 'Training Model',
+        text: 'Waiting for Trainer',
         progress: 50
+      },
+      'training': { 
+        color: 'warning', 
+        icon: <HourglassSplit size={16} />, 
+        text: 'Training Model',
+        progress: 55
       },
       'pending_evaluation': { 
         color: 'primary', 
         icon: <HourglassSplit size={16} />, 
         text: 'Evaluating',
         progress: 75
+      },
+      'pending_deployment': { 
+        color: 'info', 
+        icon: <HourglassSplit size={16} />, 
+        text: 'Preparing Deployment',
+        progress: 85
+      },
+      'deploying': { 
+        color: 'primary', 
+        icon: <HourglassSplit size={16} />, 
+        text: 'Deploying',
+        progress: 90
       },
       'completed': { 
         color: 'success', 

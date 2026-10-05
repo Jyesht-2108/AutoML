@@ -7,7 +7,7 @@ import os
 import json
 import tempfile
 import shutil
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 import asyncio
 import threading
 
@@ -48,7 +48,7 @@ def log_to_supabase(project_id: str, message: str, level: str = "info"):
             "agent_name": "dataset",
             "message": message,
             "log_level": level,
-            "created_at": datetime.now(UTC).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat()
         }).execute()
     except Exception as e:
         print(f"Failed to log to Supabase: {e}")
@@ -61,7 +61,7 @@ def send_chat_message(user_id: str, content: str):
             "user_id": user_id,
             "role": "assistant",
             "content": content,
-            "created_at": datetime.now(UTC).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat()
         }).execute()
     except Exception as e:
         print(f"Failed to send chat message: {e}")
@@ -392,7 +392,7 @@ async def start_dataset_job(job: DatasetJobRequest):
                 "gcs_url": gcs_url,
                 "size": f"{file_size_gb:.2f} GB",
                 "source": "kaggle",
-                "created_at": datetime.now(UTC).isoformat()
+                "created_at": datetime.now(timezone.utc).isoformat()
             }).execute()
             print(f"✅ Dataset info stored successfully")
             dataset_stored = True
@@ -404,15 +404,15 @@ async def start_dataset_job(job: DatasetJobRequest):
             raise
         
         # Update project status - this is critical, retry if needed
-        print(f"📝 Updating project status to pending_training...")
+        print(f"📝 Updating project status to pending_sanity...")
         status_updated = False
         max_retries = 3
         
         for attempt in range(max_retries):
             try:
                 update_result = supabase.table("projects").update({
-                    "status": "pending_training",
-                    "updated_at": datetime.now(UTC).isoformat()
+                    "status": "pending_sanity",
+                    "updated_at": datetime.now(timezone.utc).isoformat()
                 }).eq("id", project_id).execute()
                 print(f"✅ Project status updated successfully (attempt {attempt + 1})")
                 status_updated = True
@@ -436,7 +436,7 @@ async def start_dataset_job(job: DatasetJobRequest):
         if not status_updated:
             # Dataset is uploaded but status wasn't updated - this is not a complete failure
             print(f"⚠️ Dataset uploaded successfully but status remains 'pending_dataset'")
-            print(f"   Manual intervention may be needed to update status to 'pending_training'")
+            print(f"   Manual intervention may be needed to update status to 'pending_sanity'")
             # Don't raise exception - the dataset work is done
         
         log_to_supabase(project_id, "Dataset agent completed successfully", "info")
@@ -445,7 +445,7 @@ async def start_dataset_job(job: DatasetJobRequest):
             f"✅ Dataset uploaded successfully!\n"
             f"Dataset: {dataset_ref}\n"
             f"Size: {file_size_gb:.2f} GB\n"
-            f"Training Agent can now begin.")
+            f"Data Sanity Auditor will now inspect the dataset...")
         
         # Clean up Kaggle credentials after use for security
         kaggle_json_path = os.path.expanduser("~/.kaggle/kaggle.json")
@@ -488,7 +488,7 @@ async def start_dataset_job(job: DatasetJobRequest):
                 # No dataset, this is a real failure
                 supabase.table("projects").update({
                     "status": "failed",
-                    "updated_at": datetime.now(UTC).isoformat()
+                    "updated_at": datetime.now(timezone.utc).isoformat()
                 }).eq("id", project_id).execute()
                 print(f"❌ Marked project as failed (no dataset found)")
         except Exception as check_error:
@@ -496,7 +496,7 @@ async def start_dataset_job(job: DatasetJobRequest):
             print(f"⚠️ Could not check dataset status: {check_error}")
             supabase.table("projects").update({
                 "status": "failed",
-                "updated_at": datetime.now(UTC).isoformat()
+                "updated_at": datetime.now(timezone.utc).isoformat()
             }).eq("id", project_id).execute()
         
         raise HTTPException(status_code=500, detail=str(e))
@@ -519,7 +519,7 @@ async def save_kaggle_auth(auth: KaggleAuthRequest):
         
         supabase.table("projects").update({
             "metadata": metadata,
-            "updated_at": datetime.now(UTC).isoformat()
+            "updated_at": datetime.now(timezone.utc).isoformat()
         }).eq("id", auth.project_id).execute()
         
         log_to_supabase(auth.project_id, "Kaggle credentials saved", "info")
@@ -662,7 +662,7 @@ def process_project_sync(project_id: str):
                 "gcs_url": gcs_url,
                 "size": f"{file_size_gb:.2f} GB",
                 "source": "kaggle",
-                "created_at": datetime.now(UTC).isoformat()
+                "created_at": datetime.now(timezone.utc).isoformat()
             }).execute()
             print(f"[AUTO] ✅ Dataset info stored successfully")
             dataset_stored = True
@@ -674,15 +674,15 @@ def process_project_sync(project_id: str):
             raise
         
         # Update project status - retry logic for robustness
-        print(f"[AUTO] 📝 Updating project status to pending_training...")
+        print(f"[AUTO] 📝 Updating project status to pending_sanity...")
         status_updated = False
         max_retries = 3
         
         for attempt in range(max_retries):
             try:
                 update_result = supabase.table("projects").update({
-                    "status": "pending_training",
-                    "updated_at": datetime.now(UTC).isoformat()
+                    "status": "pending_sanity",
+                    "updated_at": datetime.now(timezone.utc).isoformat()
                 }).eq("id", project_id).execute()
                 print(f"[AUTO] ✅ Status updated successfully (attempt {attempt + 1}): {update_result.data}")
                 status_updated = True
@@ -717,7 +717,7 @@ def process_project_sync(project_id: str):
             f"✅ Dataset auto-uploaded successfully!\n"
             f"Dataset: {dataset_ref}\n"
             f"Size: {file_size_gb:.2f} GB\n"
-            f"Training Agent can now begin.")
+            f"Data Sanity Auditor will now inspect the dataset...")
         
         print(f"[AUTO] ✅ Project {project_id} completed successfully")
         
@@ -745,7 +745,7 @@ def process_project_sync(project_id: str):
                 # No dataset, this is a real failure
                 supabase.table("projects").update({
                     "status": "failed",
-                    "updated_at": datetime.now(UTC).isoformat()
+                    "updated_at": datetime.now(timezone.utc).isoformat()
                 }).eq("id", project_id).execute()
                 print(f"[AUTO] ❌ Marked project as failed (no dataset found)")
         except Exception as check_error:
@@ -753,7 +753,7 @@ def process_project_sync(project_id: str):
             print(f"[AUTO] ⚠️ Could not check dataset status: {check_error}")
             supabase.table("projects").update({
                 "status": "failed",
-                "updated_at": datetime.now(UTC).isoformat()
+                "updated_at": datetime.now(timezone.utc).isoformat()
             }).eq("id", project_id).execute()
 
 

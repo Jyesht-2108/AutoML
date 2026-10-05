@@ -1,0 +1,108 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "4000:4000"
+    env_file:
+      - .env.docker
+    environment:
+      - MCP_SERVER_URL=http://mcp_server:8000
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/serviceAccount.json
+    volumes:
+      - ./credentials:/app/credentials
+    depends_on:
+      - mcp_server
+    restart: unless-stopped
+
+  mcp_server:
+    build:
+      context: ./mcp_server
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env.docker
+    volumes:
+      - ./credentials:/app/credentials
+    restart: unless-stopped
+
+  planner-agent:
+    build:
+      context: ./Planner-Agent/agent/planner
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env.docker
+    restart: unless-stopped
+
+  dataset-agent:
+    build:
+      context: ./Dataset_Agent/agents/dataset
+      dockerfile: Dockerfile
+    ports:
+      - "8002:8002"
+    env_file:
+      - .env.docker
+    volumes:
+      - ./credentials:/app/credentials
+    restart: unless-stopped
+
+  trainer-agent:
+    build:
+      context: ./Trainer-Agent/agent
+      dockerfile: Dockerfile
+    shm_size: '2gb'
+    ports:
+      - "8003:8003"
+    environment:
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env.docker
+    volumes:
+      - ./credentials:/app/credentials
+      - torch_cache:/root/.cache/torch
+    restart: unless-stopped
+
+  sanity-agent:
+    build:
+      context: ./Sanity-Agent/agent
+      dockerfile: Dockerfile
+    ports:
+      - "8004:8004"
+    env_file:
+      - .env.docker
+    volumes:
+      - ./credentials:/app/credentials
+    restart: unless-stopped
+
+  privacy-agent:
+    build:
+      context: ./Privacy-Agent/agent
+      dockerfile: Dockerfile
+    ports:
+      - "8005:8005"
+    env_file:
+      - .env.docker
+    volumes:
+      - ./credentials:/app/credentials
+    restart: unless-stopped
+
+  deployment-agent:
+    build:
+      context: ./Deployment-Agent/agent
+      dockerfile: Dockerfile
+    ports:
+      - "8007:8007"
+    env_file:
+      - .env.docker
+    volumes:
+      - ./credentials:/app/credentials
+    restart: unless-stopped
+
+volumes:
+  torch_cache:

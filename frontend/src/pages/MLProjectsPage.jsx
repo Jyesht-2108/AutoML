@@ -1,9 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Modal, Button, Tab, Tabs, Badge } from 'react-bootstrap';
 import { motion } from 'framer-motion';
 import MLChatBot from '../components/MLChatBot';
 import ProjectList from '../components/ProjectList';
 import AgentLogsViewer from '../components/AgentLogsViewer';
+import SanityReviewPanel from '../components/SanityReviewPanel';
+import PrivacyReviewPanel from '../components/PrivacyReviewPanel';
+import TrainingConfigPanel from '../components/TrainingConfigPanel';
+import JustificationReport from '../components/JustificationReport';
 import { downloadModel } from '../services/mlApi';
 import { 
   Download, 
@@ -11,13 +15,21 @@ import {
   Activity,
   Database,
   Cpu,
-  BarChart
+  BarChart,
+  ShieldCheck,
+  ShieldLock
 } from 'react-bootstrap-icons';
 
-const MLProjectsPage = ({ user }) => {
+const MLProjectsPage = ({ user, refreshTriggerFromParent }) => {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [selectedProject, setSelectedProject] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+
+  useEffect(() => {
+    if (refreshTriggerFromParent) {
+      setRefreshTrigger(refreshTriggerFromParent);
+    }
+  }, [refreshTriggerFromParent]);
 
   const handleProjectCreated = () => {
     setRefreshTrigger(prev => prev + 1);
@@ -28,16 +40,11 @@ const MLProjectsPage = ({ user }) => {
     setShowDetailsModal(true);
   };
 
-  const handleDownload = async (project) => {
+  const handleDownload = (project) => {
     try {
-      const response = await downloadModel(project.id);
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `${project.name}_model.zip`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      const downloadUrl = `${import.meta.env.VITE_API_BASE_URL}/api/ml/projects/${project.id}/download`;
+      // Use window.open to let the browser handle the streaming download natively
+      window.open(downloadUrl, '_blank');
     } catch (error) {
       console.error('Error downloading model:', error);
       alert('Failed to download model. Please try again.');
@@ -48,10 +55,20 @@ const MLProjectsPage = ({ user }) => {
     const stages = {
       'draft': { active: 'planner', completed: [] },
       'pending_dataset': { active: 'dataset', completed: ['planner'] },
-      'pending_training': { active: 'training', completed: ['planner', 'dataset'] },
-      'pending_evaluation': { active: 'evaluation', completed: ['planner', 'dataset', 'training'] },
-      'completed': { active: null, completed: ['planner', 'dataset', 'training', 'evaluation'] },
-      'export_ready': { active: null, completed: ['planner', 'dataset', 'training', 'evaluation'] }
+      'pending_sanity': { active: 'sanity', completed: ['planner', 'dataset'] },
+      'pending_sanity_review': { active: 'sanity', completed: ['planner', 'dataset'] },
+      'pending_sanity_fix': { active: 'sanity', completed: ['planner', 'dataset'] },
+      'pending_privacy': { active: 'privacy', completed: ['planner', 'dataset', 'sanity'] },
+      'pending_privacy_review': { active: 'privacy', completed: ['planner', 'dataset', 'sanity'] },
+      'pending_privacy_fix': { active: 'privacy', completed: ['planner', 'dataset', 'sanity'] },
+      'pending_training_config': { active: 'training', completed: ['planner', 'dataset', 'sanity', 'privacy'] },
+      'pending_training': { active: 'training', completed: ['planner', 'dataset', 'sanity', 'privacy'] },
+      'training': { active: 'training', completed: ['planner', 'dataset', 'sanity', 'privacy'] },
+      'pending_evaluation': { active: 'evaluation', completed: ['planner', 'dataset', 'sanity', 'privacy', 'training'] },
+      'pending_deployment': { active: 'deployment', completed: ['planner', 'dataset', 'sanity', 'privacy', 'training', 'evaluation'] },
+      'deploying': { active: 'deployment', completed: ['planner', 'dataset', 'sanity', 'privacy', 'training', 'evaluation'] },
+      'completed': { active: null, completed: ['planner', 'dataset', 'sanity', 'privacy', 'training', 'evaluation', 'deployment'] },
+      'export_ready': { active: null, completed: ['planner', 'dataset', 'sanity', 'privacy', 'training', 'evaluation', 'deployment'] }
     };
     return stages[status] || stages['draft'];
   };
@@ -61,8 +78,11 @@ const MLProjectsPage = ({ user }) => {
     const agents = [
       { name: 'Planner', icon: <Activity size={20} />, key: 'planner' },
       { name: 'Dataset', icon: <Database size={20} />, key: 'dataset' },
+      { name: 'Sanity', icon: <ShieldCheck size={20} />, key: 'sanity' },
+      { name: 'Privacy', icon: <ShieldLock size={20} />, key: 'privacy' },
       { name: 'Training', icon: <Cpu size={20} />, key: 'training' },
-      { name: 'Evaluation', icon: <BarChart size={20} />, key: 'evaluation' }
+      { name: 'Evaluation', icon: <BarChart size={20} />, key: 'evaluation' },
+      { name: 'Deploy', icon: <Activity size={20} />, key: 'deployment' }
     ];
 
     return (
@@ -292,17 +312,24 @@ const MLProjectsPage = ({ user }) => {
                             <strong>Includes:</strong>
                             <ul className="mb-0 mt-1" style={{ paddingLeft: '20px' }}>
                               <li>model.pth - Trained model weights</li>
-                              <li>predict.py - Inference script</li>
-                              <li>labels.json - Class mappings</li>
-                              <li>README.txt - Usage instructions</li>
+                              <li>Dockerfile - Container configuration</li>
+                              <li>app.py - FastAPI inference server</li>
+                              <li>requirements.txt - Server dependencies</li>
+                              <li>metadata.json & README.md - AI Justification</li>
                             </ul>
                           </div>
                           <small className="text-muted">
-                            Click "Download Model" to get the complete bundle
+                            Click "Download Model" to get the complete deployment package
                           </small>
                         </div>
                       </div>
                     )}
+                  </div>
+                </Tab>
+
+                <Tab eventKey="justification" title="📜 AI Justification">
+                  <div className="mt-3">
+                    <JustificationReport metadata={selectedProject.metadata} />
                   </div>
                 </Tab>
                 
@@ -311,6 +338,48 @@ const MLProjectsPage = ({ user }) => {
                     <AgentLogsViewer projectId={selectedProject.id} />
                   </div>
                 </Tab>
+
+                {selectedProject.status === 'pending_sanity_review' && (
+                  <Tab eventKey="sanity" title="🔬 Sanity Review" className="position-relative">
+                    <div className="mt-3">
+                      <SanityReviewPanel 
+                        project={selectedProject}
+                        onApproved={() => {
+                          setShowDetailsModal(false);
+                          setRefreshTrigger(prev => prev + 1);
+                        }}
+                      />
+                    </div>
+                  </Tab>
+                )}
+
+                {selectedProject.status === 'pending_privacy_review' && (
+                  <Tab eventKey="privacy" title="🛡️ Privacy Review" className="position-relative">
+                    <div className="mt-3">
+                      <PrivacyReviewPanel 
+                        project={selectedProject}
+                        onApproved={() => {
+                          setShowDetailsModal(false);
+                          setRefreshTrigger(prev => prev + 1);
+                        }}
+                      />
+                    </div>
+                  </Tab>
+                )}
+                
+                {selectedProject.status === 'pending_training_config' && (
+                  <Tab eventKey="config" title="⚙️ Training Config" className="position-relative">
+                    <div className="mt-3">
+                      <TrainingConfigPanel 
+                        project={selectedProject}
+                        onConfigSaved={() => {
+                          setShowDetailsModal(false);
+                          setRefreshTrigger(prev => prev + 1);
+                        }}
+                      />
+                    </div>
+                  </Tab>
+                )}
                 
                 <Tab eventKey="metadata" title="Metadata">
                   <div className="mt-3">
