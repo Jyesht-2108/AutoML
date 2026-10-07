@@ -69,4 +69,11 @@ export const saveTrainingConfig = (projectId, config) => {
   return mlApi.post(`/api/ml/projects/${projectId}/training-config`, config);
 };
 
+// XAI: Get AI-powered insights for a project
+export const getAIInsights = (projectId) => {
+  return mlApi.get(`/api/ml/projects/${projectId}/ai-insights`, {
+    timeout: 180000 // 180s timeout for LLM call
+  });
+};
+
 export default mlApi;

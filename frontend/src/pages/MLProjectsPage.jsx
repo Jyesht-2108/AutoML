@@ -4,6 +4,8 @@ import { motion } from 'framer-motion';
 import MLChatBot from '../components/MLChatBot';
 import ProjectList from '../components/ProjectList';
 import AgentLogsViewer from '../components/AgentLogsViewer';
+import MetricsViewer from '../components/MetricsViewer';
+import EvaluationReviewPanel from '../components/EvaluationReviewPanel';
 import SanityReviewPanel from '../components/SanityReviewPanel';
 import PrivacyReviewPanel from '../components/PrivacyReviewPanel';
 import TrainingConfigPanel from '../components/TrainingConfigPanel';
@@ -24,6 +26,7 @@ const MLProjectsPage = ({ user, refreshTriggerFromParent }) => {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [selectedProject, setSelectedProject] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [activeTab, setActiveTab] = useState('details');
 
   useEffect(() => {
     if (refreshTriggerFromParent) {
@@ -37,6 +40,14 @@ const MLProjectsPage = ({ user, refreshTriggerFromParent }) => {
 
   const handleViewDetails = (project) => {
     setSelectedProject(project);
+    
+    // Auto-select tab based on status
+    if (project.status === 'pending_sanity_review') setActiveTab('sanity');
+    else if (project.status === 'pending_privacy_review') setActiveTab('privacy');
+    else if (project.status === 'pending_training_config') setActiveTab('config');
+    else if (project.status === 'pending_evaluation_review') setActiveTab('evaluation_review');
+    else setActiveTab('details');
+
     setShowDetailsModal(true);
   };
 
@@ -65,6 +76,7 @@ const MLProjectsPage = ({ user, refreshTriggerFromParent }) => {
       'pending_training': { active: 'training', completed: ['planner', 'dataset', 'sanity', 'privacy'] },
       'training': { active: 'training', completed: ['planner', 'dataset', 'sanity', 'privacy'] },
       'pending_evaluation': { active: 'evaluation', completed: ['planner', 'dataset', 'sanity', 'privacy', 'training'] },
+      'pending_evaluation_review': { active: 'evaluation', completed: ['planner', 'dataset', 'sanity', 'privacy', 'training'] },
       'pending_deployment': { active: 'deployment', completed: ['planner', 'dataset', 'sanity', 'privacy', 'training', 'evaluation'] },
       'deploying': { active: 'deployment', completed: ['planner', 'dataset', 'sanity', 'privacy', 'training', 'evaluation'] },
       'completed': { active: null, completed: ['planner', 'dataset', 'sanity', 'privacy', 'training', 'evaluation', 'deployment'] },
@@ -73,7 +85,7 @@ const MLProjectsPage = ({ user, refreshTriggerFromParent }) => {
     return stages[status] || stages['draft'];
   };
 
-  const AgentPipeline = ({ status }) => {
+  const AgentPipeline = ({ status, onNodeClick }) => {
     const agentStatus = getAgentStatus(status);
     const agents = [
       { name: 'Planner', icon: <Activity size={20} />, key: 'planner' },
@@ -98,7 +110,8 @@ const MLProjectsPage = ({ user, refreshTriggerFromParent }) => {
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ delay: idx * 0.1 }}
                 className="text-center"
-                style={{ flex: 1 }}
+                style={{ flex: 1, cursor: 'pointer' }}
+                onClick={() => onNodeClick && onNodeClick(agent.key)}
               >
                 <div
                   style={{
@@ -246,9 +259,24 @@ const MLProjectsPage = ({ user, refreshTriggerFromParent }) => {
         <Modal.Body className="p-4">
           {selectedProject && (
             <>
-              <AgentPipeline status={selectedProject.status} />
+              <AgentPipeline 
+                status={selectedProject.status} 
+                onNodeClick={(agentKey) => {
+                  if (agentKey === 'sanity' && selectedProject.status === 'pending_sanity_review') setActiveTab('sanity');
+                  else if (agentKey === 'privacy' && selectedProject.status === 'pending_privacy_review') setActiveTab('privacy');
+                  else if (agentKey === 'training' && selectedProject.status === 'pending_training_config') setActiveTab('config');
+                  else if (agentKey === 'evaluation' && selectedProject.status === 'pending_evaluation_review') setActiveTab('evaluation_review');
+                  else if (agentKey === 'evaluation' && (selectedProject.metadata?.metrics || selectedProject.metadata?.evaluation_metrics)) setActiveTab('metrics');
+                  else if (agentKey === 'planner') setActiveTab('justification');
+                  else setActiveTab('logs');
+                }}
+              />
               
-              <Tabs defaultActiveKey="details" className="mb-4">
+              <Tabs 
+                activeKey={activeTab}
+                onSelect={(k) => setActiveTab(k)}
+                className="mb-4"
+              >
                 <Tab eventKey="details" title="Details">
                   <div className="mt-3">
                     <div className="mb-3 p-3" style={{ 
@@ -312,7 +340,7 @@ const MLProjectsPage = ({ user, refreshTriggerFromParent }) => {
                             <strong>Includes:</strong>
                             <ul className="mb-0 mt-1" style={{ paddingLeft: '20px' }}>
                               <li>model.pth - Trained model weights</li>
-                              <li>Dockerfile - Container configuration</li>
+                              <li>Dockerfile & docker-compose.yml - Container configs</li>
                               <li>app.py - FastAPI inference server</li>
                               <li>requirements.txt - Server dependencies</li>
                               <li>metadata.json & README.md - AI Justification</li>
@@ -327,9 +355,15 @@ const MLProjectsPage = ({ user, refreshTriggerFromParent }) => {
                   </div>
                 </Tab>
 
+                {(selectedProject.metadata?.metrics || selectedProject.metadata?.evaluation_metrics) && (
+                  <Tab eventKey="metrics" title="📊 Metrics & Graphs">
+                    <MetricsViewer project={selectedProject} />
+                  </Tab>
+                )}
+
                 <Tab eventKey="justification" title="📜 AI Justification">
                   <div className="mt-3">
-                    <JustificationReport metadata={selectedProject.metadata} />
+                    <JustificationReport metadata={selectedProject.metadata} projectId={selectedProject.id} />
                   </div>
                 </Tab>
                 
@@ -374,6 +408,24 @@ const MLProjectsPage = ({ user, refreshTriggerFromParent }) => {
                         project={selectedProject}
                         onConfigSaved={() => {
                           setShowDetailsModal(false);
+                          setRefreshTrigger(prev => prev + 1);
+                        }}
+                      />
+                    </div>
+                  </Tab>
+                )}
+                
+                {selectedProject.status === 'pending_evaluation_review' && (
+                  <Tab eventKey="evaluation_review" title="📈 Evaluation Review" className="position-relative">
+                    <div className="mt-3">
+                      <EvaluationReviewPanel 
+                        project={selectedProject}
+                        onApproved={(newStatus) => {
+                          if (newStatus === 'pending_training_config') {
+                            setSelectedProject(prev => ({ ...prev, status: newStatus }));
+                          } else {
+                            setShowDetailsModal(false);
+                          }
                           setRefreshTrigger(prev => prev + 1);
                         }}
                       />

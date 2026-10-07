@@ -76,6 +76,27 @@ def upload_to_gcs(local_path: str, destination_blob_name: str) -> str:
     return f"gs://{GCP_BUCKET_NAME}/{destination_blob_name}"
 
 
+def generate_docker_compose(project_name: str) -> str:
+    # Create a safe service name
+    service_name = project_name.lower().replace(" ", "-").replace("_", "-")
+    import re
+    service_name = re.sub(r'[^a-z0-9-]', '', service_name)
+    if not service_name:
+        service_name = "ml-model-service"
+        
+    return f"""version: '3.8'
+
+services:
+  {service_name}:
+    build: .
+    container_name: {service_name}
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    environment:
+      - MODEL_ENV=production
+"""
+
 def generate_dockerfile() -> str:
     return """FROM python:3.10-slim
 
@@ -295,10 +316,18 @@ async def predict(data: TextInput):
             "label": label
         }}
         
-        if hasattr(model, "decision_function"):
+        if hasattr(model, "predict_proba"):
+            proba = model.predict_proba([data.text])[0]
+            result["confidence"] = round(float(max(proba)), 4)
+            result["probabilities"] = {{
+                CLASS_LABELS[i] if i < len(CLASS_LABELS) else str(i): round(float(p), 4)
+                for i, p in enumerate(proba)
+            }}
+        elif hasattr(model, "decision_function"):
             scores = model.decision_function([data.text])
             if len(scores.shape) == 1:
-                result["confidence"] = round(float(abs(scores[0])), 4)
+                import math
+                result["confidence"] = round(1 / (1 + math.exp(-abs(scores[0]))), 4)
         
         return result
     except Exception as e:
@@ -379,6 +408,8 @@ def process_pending_deployment(project_id: str):
                 requirements_content = generate_requirements()
                 app_content = generate_app_py(model_architecture, num_classes, class_labels)
             
+            docker_compose_content = generate_docker_compose(project_name)
+            
             with open(os.path.join(temp_dir, "Dockerfile"), "w") as f:
                 f.write(dockerfile_content)
                 
@@ -387,6 +418,9 @@ def process_pending_deployment(project_id: str):
                 
             with open(os.path.join(temp_dir, "app.py"), "w") as f:
                 f.write(app_content)
+                
+            with open(os.path.join(temp_dir, "docker-compose.yml"), "w") as f:
+                f.write(docker_compose_content)
                 
             log_to_supabase(project_id, "Zipping Docker container files...", "info")
             

@@ -1,7 +1,7 @@
 import os
 import sys
 import logging
-from fastapi import FastAPI, HTTPException, Form, File, UploadFile
+from fastapi import FastAPI, HTTPException, Form, File, UploadFile, Request
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings
 
@@ -248,6 +248,162 @@ async def get_ml_projects(user_id: str, all: str = "false"):
         return {"projects": projects}
     except Exception as e:
         logger.error(f"Error fetching ML projects: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.patch("/api/ml/projects/{project_id}/status")
+async def update_project_status(project_id: str, request: Request):
+    try:
+        from supabase_client import get_supabase_client
+        supabase = get_supabase_client()
+        
+        body = await request.json()
+        new_status = body.get("status")
+        
+        if not new_status:
+            raise HTTPException(status_code=400, detail="Status is required")
+            
+        supabase.table("projects").update({"status": new_status}).eq("id", project_id).execute()
+        return {"success": True, "status": new_status}
+    except Exception as e:
+        logger.error(f"Error updating project status: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/ml/projects/{project_id}/ai-insights")
+async def get_ai_insights(project_id: str):
+    """
+    Generate AI-powered insights by feeding full project context to Gemini.
+    Gathers: project metadata, metrics, agent logs, training config, sanity/privacy results.
+    Returns: structured LLM analysis with suggestions.
+    """
+    try:
+        from supabase_client import get_supabase_client
+        import json as json_lib
+        supabase = get_supabase_client()
+
+        # 1. Fetch project
+        project = supabase.table("projects").select("*").eq("id", project_id).execute()
+        if not project.data:
+            raise HTTPException(status_code=404, detail="Project not found")
+        project_data = project.data[0]
+
+        # 2. Fetch model record
+        model_record = supabase.table("models").select("*").eq("project_id", project_id).execute()
+        model_data = model_record.data[0] if model_record.data else {}
+
+        # 3. Fetch agent logs (last 100)
+        logs = supabase.table("agent_logs").select("agent_name, message, log_level, created_at").eq("project_id", project_id).order("created_at", desc=False).limit(100).execute()
+        log_entries = logs.data if logs.data else []
+
+        # 4. Build context
+        metadata = project_data.get("metadata") or {}
+        metrics = metadata.get("metrics") or metadata.get("evaluation_metrics") or {}
+        feature_importance = metadata.get("feature_importance") or {}
+        sanity_report = metadata.get("sanity_report") or {}
+        privacy_report = metadata.get("privacy_report") or {}
+        training_config = {
+            "preferred_model": metadata.get("preferred_model"),
+            "epochs": metadata.get("epochs"),
+            "learning_rate": metadata.get("learning_rate"),
+            "batch_size": metadata.get("batch_size"),
+            "optimizer": metadata.get("optimizer"),
+        }
+
+        # Format logs for LLM
+        log_summary = "\n".join([
+            f"[{l.get('agent_name','?')}] ({l.get('log_level','info')}) {l.get('message','')}"
+            for l in log_entries[-50:]  # Last 50 logs
+        ])
+
+        context_prompt = f"""You are an expert ML engineer reviewing an AutoML pipeline run. Analyze everything below and provide actionable insights.
+
+## Project Info
+- Name: {project_data.get('name')}
+- Task Type: {project_data.get('task_type')}
+- Framework: {project_data.get('framework', 'PyTorch')}
+- Current Status: {project_data.get('status')}
+
+## Training Configuration Used
+{json_lib.dumps(training_config, indent=2)}
+
+## Evaluation Metrics
+{json_lib.dumps(metrics, indent=2)}
+
+## Feature Importance (if tabular)
+{json_lib.dumps(dict(list(feature_importance.items())[:15]), indent=2) if feature_importance else "N/A"}
+
+## Sanity Agent Report
+{json_lib.dumps(sanity_report, indent=2) if sanity_report else "No sanity issues found."}
+
+## Privacy Agent Report
+{json_lib.dumps(privacy_report, indent=2) if privacy_report else "No privacy issues found."}
+
+## Agent Activity Log (chronological)
+{log_summary if log_summary else "No logs available."}
+
+## Model Record
+- Architecture: {model_data.get('metadata', {}).get('architecture', 'unknown') if model_data else 'N/A'}
+- Accuracy: {model_data.get('accuracy', 'N/A') if model_data else 'N/A'}
+
+---
+
+Based on ALL of the above context, respond in the following JSON format ONLY (no markdown, no code fences, just raw JSON):
+{{
+  "overall_verdict": "deploy" or "retrain" or "investigate",
+  "confidence_in_verdict": "high" or "medium" or "low",
+  "summary": "2-3 sentence executive summary of the model's performance and pipeline health",
+  "metrics_analysis": "Detailed interpretation of accuracy, precision, recall, F1. Which classes are weak? Is there class imbalance?",
+  "data_quality_analysis": "Analysis of what the sanity and privacy agents found. Were there data issues that could affect model quality?",
+  "training_analysis": "Was the training config appropriate? Were enough epochs used? Is the learning rate suitable?",
+  "strengths": ["strength 1", "strength 2", ...],
+  "weaknesses": ["weakness 1", "weakness 2", ...],
+  "retrain_suggestions": {{
+    "preferred_model": "suggested model architecture or null",
+    "epochs": suggested_number_or_null,
+    "learning_rate": suggested_lr_or_null,
+    "batch_size": suggested_bs_or_null,
+    "reasoning": "Why these specific parameters would improve results"
+  }},
+  "next_steps": ["actionable step 1", "actionable step 2", ...]
+}}"""
+
+        # Call Gemini
+        import google.generativeai as genai
+        genai.configure(api_key=settings.GEMINI_API_KEY)
+        model = genai.GenerativeModel('gemini-3.5-flash')
+        response = await model.generate_content_async(context_prompt)
+        raw_text = response.text.strip()
+
+        # Parse JSON from response (handle markdown code fences)
+        if raw_text.startswith("```"):
+            # Strip ```json ... ```
+            lines = raw_text.split("\n")
+            raw_text = "\n".join(lines[1:-1])
+        
+        try:
+            insights = json_lib.loads(raw_text)
+        except json_lib.JSONDecodeError:
+            # Fallback: return raw text as summary
+            insights = {
+                "overall_verdict": "investigate",
+                "confidence_in_verdict": "low",
+                "summary": raw_text[:500],
+                "metrics_analysis": "Could not parse structured response.",
+                "data_quality_analysis": "",
+                "training_analysis": "",
+                "strengths": [],
+                "weaknesses": [],
+                "retrain_suggestions": {},
+                "next_steps": ["Review the raw AI analysis above."]
+            }
+
+        # Save insights to database
+        metadata["ai_insights"] = insights
+        supabase.table("projects").update({"metadata": metadata}).eq("id", project_id).execute()
+
+        return {"success": True, "insights": insights}
+
+    except Exception as e:
+        logger.error(f"Error generating AI insights: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/ml/projects/{project_id}")

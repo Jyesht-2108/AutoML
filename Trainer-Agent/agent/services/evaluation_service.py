@@ -237,6 +237,13 @@ async def execute_evaluation(project_id: str) -> Dict[str, Any]:
         
         # Update project with bundle URL
         project_metadata["bundle_url"] = bundle_url
+        project_metadata["metrics"] = {
+            "accuracy": float(metrics["accuracy"]),
+            "precision": float(metrics["precision"]),
+            "recall": float(metrics["recall"]),
+            "f1_score": float(metrics["f1_score"]),
+            "classification_report": metrics["detailed_metrics"]
+        }
         project_metadata["evaluation_metrics"] = metrics["detailed_metrics"]
         
         # Upload Grad-CAM preview if available
@@ -256,11 +263,11 @@ async def execute_evaluation(project_id: str) -> Dict[str, Any]:
 
         
         db_service.update_project_metadata(project_id, project_metadata)
-        db_service.update_project_status(project_id, "pending_deployment")
+        db_service.update_project_status(project_id, "pending_evaluation_review")
         
         db_service.log_agent_activity(
             project_id,
-            "Evaluation workflow completed, transitioning to deployment",
+            "Evaluation workflow completed, waiting for user review",
             "info"
         )
         

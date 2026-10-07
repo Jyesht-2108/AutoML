@@ -219,11 +219,18 @@ async def execute_sklearn_evaluation(project_id: str) -> Dict[str, Any]:
             "feature_importance": feature_importance,
             "bundle_url": bundle_gcs_url,
         }
-        db_service.update_model_metadata(model_record["id"], updated_metadata, metrics.get("accuracy", metrics.get("r2_score", 0)))
+        db_service.update_model_metrics(model_record["id"], metrics.get("accuracy", metrics.get("r2_score", 0)), updated_metadata)
 
-        # Update project status
-        db_service.update_project_status(project_id, "pending_deployment")
-        db_service.log_agent_activity(project_id, "Sklearn evaluation completed successfully", "info")
+        # Update project status and metadata
+        project_record = db_service.client.table("projects").select("metadata").eq("id", project_id).execute()
+        if project_record.data:
+            project_metadata = project_record.data[0].get("metadata") or {}
+            project_metadata["metrics"] = metrics
+            project_metadata["feature_importance"] = feature_importance
+            db_service.update_project_metadata(project_id, project_metadata)
+            
+        db_service.update_project_status(project_id, "pending_evaluation_review")
+        db_service.log_agent_activity(project_id, "Sklearn evaluation completed successfully. Waiting for user review.", "info")
 
         return {
             "success": True,
@@ -314,10 +321,16 @@ def predict(text: str) -> dict:
     prediction = model.predict([text])[0]
     result = {{"prediction": int(prediction), "label": CLASS_LABELS[int(prediction)] if CLASS_LABELS else str(prediction)}}
 
-    if hasattr(model, "decision_function"):
+    if hasattr(model, "predict_proba"):
+        proba = model.predict_proba([text])[0]
+        result["confidence"] = round(float(max(proba)), 4)
+        result["probabilities"] = {{CLASS_LABELS[i] if CLASS_LABELS else str(i): round(float(p), 4) for i, p in enumerate(proba)}}
+    elif hasattr(model, "decision_function"):
         scores = model.decision_function([text])
         if len(scores.shape) == 1:
-            result["confidence"] = round(float(abs(scores[0])), 4)
+            import math
+            # Convert decision boundary distance to pseudo-probability using sigmoid
+            result["confidence"] = round(1 / (1 + math.exp(-abs(scores[0]))), 4)
 
     return result
 

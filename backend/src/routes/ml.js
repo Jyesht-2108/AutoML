@@ -60,6 +60,50 @@ router.get('/ml/projects', verifySession, async (req, res) => {
 });
 
 // Get specific ML project by ID
+router.patch('/ml/projects/:projectId/status', verifySession, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { status } = req.body;
+    
+    if (!status) {
+      return res.status(400).json({ error: 'Status is required' });
+    }
+
+    const mcpResponse = await axios.patch(
+      `${MCP_SERVER_URL}/api/ml/projects/${projectId}/status`,
+      { status }
+    );
+    
+    res.json(mcpResponse.data);
+  } catch (error) {
+    console.error('Error updating status:', error.message);
+    res.status(500).json({ 
+      error: 'Failed to update project status',
+      details: error.response?.data?.detail || error.message 
+    });
+  }
+});
+
+// AI Insights - LLM-powered analysis of pipeline run
+router.get('/ml/projects/:projectId/ai-insights', verifySession, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+
+    const mcpResponse = await axios.get(
+      `${MCP_SERVER_URL}/api/ml/projects/${projectId}/ai-insights`,
+      { timeout: 180000 } // 180s timeout for LLM call
+    );
+    
+    res.json(mcpResponse.data);
+  } catch (error) {
+    console.error('Error fetching AI insights:', error.message);
+    res.status(error.response?.status || 500).json({ 
+      error: 'Failed to generate AI insights',
+      details: error.response?.data?.detail || error.message 
+    });
+  }
+});
+
 router.get('/ml/projects/:projectId', verifySession, async (req, res) => {
   try {
     const { projectId } = req.params;

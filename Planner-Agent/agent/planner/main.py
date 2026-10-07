@@ -32,8 +32,8 @@ supabase: Client = create_client(
 
 # Initialize Gemini
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-# Use gemini-2.5-flash for the latest stable version
-model = genai.GenerativeModel('gemini-2.5-flash')
+# Use gemini-3.5-flash for the latest stable version
+model = genai.GenerativeModel('gemini-3.5-flash')
 
 
 # Pydantic Models
