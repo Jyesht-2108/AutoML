@@ -592,6 +592,46 @@ async def download_model(project_id: str, user_id: str):
         logger.error(f"Full traceback:\n{error_trace}")
         raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
 
+@app.get("/api/ml/projects/{project_id}/gradcam")
+async def get_gradcam_url(project_id: str, user_id: str):
+    try:
+        from supabase_client import get_supabase_client
+        supabase = get_supabase_client()
+        
+        project = supabase.table("projects").select("*").eq("id", project_id).execute()
+        if not project.data:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        metadata = project.data[0].get("metadata") or {}
+        gradcam_url = metadata.get("gradcam_preview_url")
+        if not gradcam_url or not gradcam_url.startswith("gs://"):
+            raise HTTPException(status_code=404, detail="No Grad-CAM preview found")
+            
+        gcs_path = gradcam_url.replace("gs://", "")
+        bucket_name = gcs_path.split("/")[0]
+        blob_path = "/".join(gcs_path.split("/")[1:])
+        
+        from google.cloud import storage
+        gcp_credentials_path = settings.GOOGLE_APPLICATION_CREDENTIALS
+        if gcp_credentials_path and gcp_credentials_path.strip() and os.path.exists(gcp_credentials_path):
+            client = storage.Client.from_service_account_json(gcp_credentials_path)
+        else:
+            client = storage.Client()
+            
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(blob_path)
+        
+        import datetime
+        signed_url = blob.generate_signed_url(
+            version="v4",
+            expiration=datetime.timedelta(minutes=60),
+            method="GET",
+        )
+        return {"download_url": signed_url}
+    except Exception as e:
+        logger.error(f"Error getting Grad-CAM URL: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 class GradCAM:
     """Simple hook-based Grad-CAM implementation for PyTorch CNNs."""
     def __init__(self, model):

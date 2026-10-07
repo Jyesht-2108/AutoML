@@ -183,6 +183,28 @@ router.get('/ml/projects/:projectId/download', verifySession, async (req, res) =
   }
 });
 
+// Get Grad-CAM signed URL
+router.get('/ml/projects/:projectId/gradcam', verifySession, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const firebaseUid = req.user.uid;
+
+    const mcpResponse = await axios.get(`${MCP_SERVER_URL}/api/ml/projects/${projectId}/gradcam`, {
+      params: { user_id: firebaseUid }
+    });
+
+    const signedUrl = mcpResponse.data?.download_url;
+    if (signedUrl) {
+      res.json({ url: signedUrl });
+    } else {
+      res.status(404).json({ error: 'Grad-CAM preview not found' });
+    }
+  } catch (error) {
+    console.error('Error fetching Grad-CAM:', error.message);
+    res.status(500).json({ error: 'Failed to fetch Grad-CAM' });
+  }
+});
+
 // Sanity Agent: Human-in-the-loop approval
 router.post('/ml/projects/:projectId/sanity-approve', verifySession, async (req, res) => {
   try {

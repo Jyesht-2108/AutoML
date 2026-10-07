@@ -15,23 +15,33 @@ const AgentLogsViewer = ({ projectId }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const endOfLogsRef = React.useRef(null);
+
   useEffect(() => {
     if (projectId) {
       fetchLogs();
+      const interval = setInterval(() => fetchLogs(true), 3000);
+      return () => clearInterval(interval);
     }
   }, [projectId]);
 
-  const fetchLogs = async () => {
+  useEffect(() => {
+    if (endOfLogsRef.current) {
+      endOfLogsRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [logs]);
+
+  const fetchLogs = async (isPolling = false) => {
     try {
-      setLoading(true);
-      setError(null);
+      if (!isPolling) setLoading(true);
+      if (!isPolling) setError(null);
       const response = await getProjectLogs(projectId);
       setLogs(response.data.logs || []);
     } catch (err) {
       console.error('Error fetching logs:', err);
-      setError('Failed to load logs');
+      if (!isPolling) setError('Failed to load logs');
     } finally {
-      setLoading(false);
+      if (!isPolling) setLoading(false);
     }
   };
 
@@ -148,6 +158,7 @@ const AgentLogsViewer = ({ projectId }) => {
           </motion.div>
         );
       })}
+      <div ref={endOfLogsRef} />
     </div>
   );
 };

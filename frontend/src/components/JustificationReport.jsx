@@ -6,7 +6,7 @@ import {
   ArrowClockwise, LightningCharge, ExclamationTriangle,
   GraphUp, ListCheck, Bullseye
 } from 'react-bootstrap-icons';
-import { getAIInsights } from '../services/mlApi';
+import mlApi, { getAIInsights } from '../services/mlApi';
 
 /**
  * JustificationReport — AI-Powered XAI Dashboard
@@ -26,6 +26,24 @@ const JustificationReport = ({ metadata, projectId }) => {
   const privacyResults = metadata?.privacy_fix_results || {};
   const hasSanity = Object.keys(sanityResults).length > 0;
   const hasPrivacy = Object.keys(privacyResults).length > 0;
+
+  const [gradcamUrl, setGradcamUrl] = useState(null);
+
+  useEffect(() => {
+    const fetchGradcam = async () => {
+      if (metadata?.gradcam_preview_url && !metadata.gradcam_preview_url.startsWith('http')) {
+        try {
+          const res = await mlApi.get(`/api/ml/projects/${projectId}/gradcam`);
+          setGradcamUrl(res.data.url);
+        } catch (err) {
+          console.error("Failed to fetch Grad-CAM URL", err);
+        }
+      } else if (metadata?.gradcam_preview_url) {
+        setGradcamUrl(metadata.gradcam_preview_url);
+      }
+    };
+    fetchGradcam();
+  }, [projectId, metadata?.gradcam_preview_url]);
 
   useEffect(() => {
     if (metadata?.ai_insights) {
@@ -343,9 +361,7 @@ const JustificationReport = ({ metadata, projectId }) => {
                   These visual heatmaps show exactly which regions of the image the AI model looked at to make its decision. Red areas indicate high importance.
                 </p>
                 <img 
-                  src={metadata.gradcam_preview_url.startsWith('http') 
-                    ? metadata.gradcam_preview_url 
-                    : `https://storage.googleapis.com/${metadata.gradcam_preview_url.replace('gs://', '')}`}
+                  src={gradcamUrl || 'https://placehold.co/600x400?text=Loading+Grad-CAM...'}
                   alt="Grad-CAM Heatmaps"
                   style={{ width: '100%', borderRadius: '8px', border: '1px solid #e2e8f0' }}
                 />

@@ -30,7 +30,8 @@ class ModelTrainer:
         epochs: int = 10,
         lr: float = 0.001,
         batch_size: int = 32,
-        use_amp: bool = False  # Automatic Mixed Precision
+        use_amp: bool = False,  # Automatic Mixed Precision
+        epoch_callback = None
     ):
         """
         Initialize the ModelTrainer.
@@ -51,6 +52,7 @@ class ModelTrainer:
         self.lr = lr
         self.batch_size = batch_size
         self.use_amp = use_amp
+        self.epoch_callback = epoch_callback
         
         # Initialize loss function and optimizer
         self.criterion = nn.CrossEntropyLoss()
@@ -300,6 +302,9 @@ class ModelTrainer:
             
             # Log progress
             print(f"✓ Epoch {epoch}/{self.epochs} - Train Loss: {train_loss:.4f} - Val Loss: {val_loss:.4f} - Val Acc: {val_acc:.2f}% - Time: {epoch_time:.2f}s")
+            
+            if self.epoch_callback:
+                self.epoch_callback(epoch, self.epochs, train_loss, val_loss, val_acc, epoch_time)
             
             # Track best model
             if val_acc > best_val_acc:
