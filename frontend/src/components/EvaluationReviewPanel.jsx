@@ -3,6 +3,7 @@ import { Card, Button, Spinner, Alert } from 'react-bootstrap';
 import { CheckCircle, ArrowCounterclockwise } from 'react-bootstrap-icons';
 import mlApi from '../services/mlApi';
 import MetricsViewer from './MetricsViewer';
+import JustificationReport from './JustificationReport';
 
 const EvaluationReviewPanel = ({ project, onApproved }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -45,6 +46,15 @@ const EvaluationReviewPanel = ({ project, onApproved }) => {
             <MetricsViewer project={project} />
           </Card.Body>
         </Card>
+
+        {/* AI Insights Integration */}
+        <div className="mb-4">
+          <h6 className="fw-bold text-primary mb-3">🤖 AI Recommendation</h6>
+          <p className="text-muted small mb-3">
+            Not sure whether to deploy or retrain? Generate an AI Insight report to get an expert analysis of your metrics and suggestions for hyperparameter tuning.
+          </p>
+          <JustificationReport project={project} projectId={project.id} metadata={project.metadata} />
+        </div>
 
         <div className="d-flex gap-3 mt-4">
           <Button
