@@ -30,7 +30,7 @@ def _find_text_files(directory: str) -> list:
     return files
 
 
-def _detect_columns(headers: list, metadata: dict) -> tuple:
+def _detect_columns(headers: list, metadata: dict, rows: list) -> tuple:
     """Detect text and label columns."""
     sanity_report = metadata.get("sanity_report", {})
 
@@ -38,26 +38,37 @@ def _detect_columns(headers: list, metadata: dict) -> tuple:
     label_col = sanity_report.get("label_column")
 
     if not text_col:
-        text_candidates = ["text", "sentence", "review", "comment", "content", "body", "message", "tweet"]
+        text_candidates = ["text", "sentence", "review", "comment", "content", "body", "message", "tweet", "v2"]
         for col in headers:
             if col.lower() in text_candidates:
                 text_col = col
                 break
 
     if not label_col:
-        label_candidates = ["label", "sentiment", "class", "target", "category"]
+        label_candidates = ["label", "sentiment", "class", "target", "category", "v1"]
         for col in headers:
             if col.lower() in label_candidates:
                 label_col = col
                 break
 
-    if not text_col and headers:
-        # Fallback: longest avg text column
-        text_col = headers[0]
-    if not label_col and len(headers) > 1:
-        label_col = [h for h in headers if h != text_col][0]
+    if not text_col or not label_col:
+        if headers and len(headers) >= 2:
+            # Fallback: check which column has longer average length in the first 50 rows
+            avg_lens = {}
+            for col in headers:
+                total_len = sum(len(str(r.get(col, ""))) for r in rows[:50])
+                avg_lens[col] = total_len / min(50, len(rows) or 1)
+            
+            # The column with the longest text is likely the text column
+            sorted_cols = sorted(avg_lens.items(), key=lambda x: x[1], reverse=True)
+            if not text_col:
+                text_col = sorted_cols[0][0]
+            if not label_col:
+                # The label is the other one
+                label_col = [h for h in headers if h != text_col][0]
 
     return text_col, label_col
+
 
 
 async def execute_text_training(project_id: str) -> Dict[str, Any]:
@@ -128,7 +139,7 @@ async def execute_text_training(project_id: str) -> Dict[str, Any]:
             for row in reader:
                 rows.append(row)
 
-        text_col, label_col = _detect_columns(headers, project_metadata)
+        text_col, label_col = _detect_columns(headers, project_metadata, rows)
 
         if not text_col or not label_col:
             db_service.update_project_status(project_id, "failed")

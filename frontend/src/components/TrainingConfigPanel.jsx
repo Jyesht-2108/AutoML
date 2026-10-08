@@ -24,13 +24,29 @@ const TrainingConfigPanel = ({ project, onConfigSaved }) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
-  const SUPPORTED_MODELS = [
-    { value: 'resnet18', label: 'ResNet-18 (Fast, Baseline)' },
-    { value: 'resnet34', label: 'ResNet-34 (Balanced)' },
-    { value: 'resnet50', label: 'ResNet-50 (High Accuracy, Slower)' },
-    { value: 'mobilenet_v2', label: 'MobileNet V2 (Lightweight, Mobile)' },
-    { value: 'efficientnet_b0', label: 'EfficientNet-B0 (Modern, Efficient)' }
-  ];
+  const taskType = project?.task_type || 'image_classification';
+
+  let SUPPORTED_MODELS = [];
+  if (taskType === 'image_classification') {
+    SUPPORTED_MODELS = [
+      { value: 'resnet18', label: 'ResNet-18 (Fast, Baseline)' },
+      { value: 'resnet34', label: 'ResNet-34 (Balanced)' },
+      { value: 'resnet50', label: 'ResNet-50 (High Accuracy, Slower)' },
+      { value: 'mobilenet_v2', label: 'MobileNet V2 (Lightweight, Mobile)' },
+      { value: 'efficientnet_b0', label: 'EfficientNet-B0 (Modern, Efficient)' }
+    ];
+  } else if (taskType.startsWith('tabular')) {
+    SUPPORTED_MODELS = [
+      { value: 'random_forest', label: 'Random Forest' },
+      { value: 'xgboost', label: 'XGBoost' },
+      { value: 'gradient_boosting', label: 'Gradient Boosting' }
+    ];
+  } else if (taskType === 'text_classification') {
+    SUPPORTED_MODELS = [
+      { value: 'distilbert', label: 'DistilBERT (Fast NLP)' },
+      { value: 'tfidf_lr', label: 'TF-IDF + Logistic Regression' }
+    ];
+  }
 
   const handleChange = (e) => {
     const { name, value, type } = e.target;
@@ -154,7 +170,7 @@ const TrainingConfigPanel = ({ project, onConfigSaved }) => {
                       <option value="128">128</option>
                     </Form.Select>
                     <Form.Text className="text-muted ms-1">
-                      Images per training step.
+                      {taskType === 'image_classification' ? 'Images per training step.' : 'Samples per training step.'}
                     </Form.Text>
                   </Form.Group>
                 </div>

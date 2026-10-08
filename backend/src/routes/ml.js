@@ -60,6 +60,50 @@ router.get('/ml/projects', verifySession, async (req, res) => {
 });
 
 // Get specific ML project by ID
+router.patch('/ml/projects/:projectId/status', verifySession, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { status } = req.body;
+    
+    if (!status) {
+      return res.status(400).json({ error: 'Status is required' });
+    }
+
+    const mcpResponse = await axios.patch(
+      `${MCP_SERVER_URL}/api/ml/projects/${projectId}/status`,
+      { status }
+    );
+    
+    res.json(mcpResponse.data);
+  } catch (error) {
+    console.error('Error updating status:', error.message);
+    res.status(500).json({ 
+      error: 'Failed to update project status',
+      details: error.response?.data?.detail || error.message 
+    });
+  }
+});
+
+// AI Insights - LLM-powered analysis of pipeline run
+router.get('/ml/projects/:projectId/ai-insights', verifySession, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+
+    const mcpResponse = await axios.get(
+      `${MCP_SERVER_URL}/api/ml/projects/${projectId}/ai-insights`,
+      { timeout: 180000 } // 180s timeout for LLM call
+    );
+    
+    res.json(mcpResponse.data);
+  } catch (error) {
+    console.error('Error fetching AI insights:', error.message);
+    res.status(error.response?.status || 500).json({ 
+      error: 'Failed to generate AI insights',
+      details: error.response?.data?.detail || error.message 
+    });
+  }
+});
+
 router.get('/ml/projects/:projectId', verifySession, async (req, res) => {
   try {
     const { projectId } = req.params;
@@ -136,6 +180,28 @@ router.get('/ml/projects/:projectId/download', verifySession, async (req, res) =
       error: errorMessage,
       details: error.message 
     });
+  }
+});
+
+// Get Grad-CAM signed URL
+router.get('/ml/projects/:projectId/gradcam', verifySession, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const firebaseUid = req.user.uid;
+
+    const mcpResponse = await axios.get(`${MCP_SERVER_URL}/api/ml/projects/${projectId}/gradcam`, {
+      params: { user_id: firebaseUid }
+    });
+
+    const signedUrl = mcpResponse.data?.download_url;
+    if (signedUrl) {
+      res.json({ url: signedUrl });
+    } else {
+      res.status(404).json({ error: 'Grad-CAM preview not found' });
+    }
+  } catch (error) {
+    console.error('Error fetching Grad-CAM:', error.message);
+    res.status(500).json({ error: 'Failed to fetch Grad-CAM' });
   }
 });
 
@@ -346,7 +412,7 @@ router.post('/ml/upload-dataset', verifySession, datasetUpload.single('dataset')
       return res.status(400).json({ error: 'No dataset file uploaded' });
     }
 
-    const { project_name, task_type, preferred_model, description } = req.body;
+    const { project_name, task_type, preferred_model, description, run_sanity, run_privacy } = req.body;
 
     if (!project_name || !project_name.trim()) {
       return res.status(400).json({ error: 'Project name is required' });
@@ -369,6 +435,8 @@ router.post('/ml/upload-dataset', verifySession, datasetUpload.single('dataset')
     formData.append('description', description || '');
     formData.append('user_name', userName || '');
     formData.append('user_email', userEmail || '');
+    formData.append('run_sanity', run_sanity || 'false');
+    formData.append('run_privacy', run_privacy || 'false');
 
     const mcpResponse = await axios.post(
       `${MCP_SERVER_URL}/api/ml/upload-dataset`,

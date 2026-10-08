@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { sessionLogout } from '../services/api';
 import { Card, Button, Form, Tabs, Tab, Container, Row, Col } from 'react-bootstrap';
 import { motion } from 'framer-motion';
-import { 
-  Person, 
-  ChatDots, 
+import {
+  Person,
+  ChatDots,
   House,
   Cpu,
   Image as ImageIcon,
@@ -24,7 +24,7 @@ const Dashboard = ({ user }) => {
   const [isChatFullscreen, setIsChatFullscreen] = useState(false);
   const [activeTab, setActiveTab] = useState('home');
   const [isAdmin, setIsAdmin] = useState(true); // Temporarily set to true for debugging
-  
+
   // Check if user is admin
   useEffect(() => {
     const checkAdminStatus = async () => {
@@ -43,13 +43,13 @@ const Dashboard = ({ user }) => {
     };
     checkAdminStatus();
   }, []);
-  
+
   // Temporary: Show admin tab for debugging
   // Remove this after confirming admin role works
   useEffect(() => {
     console.log('Is Admin:', isAdmin);
   }, [isAdmin]);
-  
+
   // Load profile from localStorage or use Firebase user data as fallback
   const [profileData, setProfileData] = useState(() => {
     // Use user.uid to make localStorage user-specific
@@ -111,20 +111,20 @@ const Dashboard = ({ user }) => {
         <Container fluid style={{ maxWidth: '1400px', margin: '0 auto' }}>
           <div className="d-flex justify-content-between align-items-center py-3">
             <div className="d-flex align-items-center gap-3">
-              <h4 className="mb-0 fw-bold" style={{ 
+              <h4 className="mb-0 fw-bold" style={{
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent'
               }}>
-                ____VibeML___________________________________________________________________________________________
+                AgentHive
               </h4>
             </div>
-            
+
             <div className="d-flex align-items-center gap-3">
               <Button
                 variant="link"
                 onClick={() => setShowProfile(!showProfile)}
-                style={{ 
+                style={{
                   color: '#4b5563',
                   textDecoration: 'none',
                   display: 'flex',
@@ -135,12 +135,12 @@ const Dashboard = ({ user }) => {
                 <Person size={20} />
                 <span className="d-none d-md-inline">Profile</span>
               </Button>
-              
+
               {activeTab === 'home' && (
                 <Button
                   variant="link"
                   onClick={() => setShowChat(!showChat)}
-                  style={{ 
+                  style={{
                     color: '#4b5563',
                     textDecoration: 'none',
                     display: 'flex',
@@ -152,12 +152,12 @@ const Dashboard = ({ user }) => {
                   <span className="d-none d-md-inline">Chat</span>
                 </Button>
               )}
-              
+
               <Button
                 variant="outline-danger"
                 size="sm"
                 onClick={handleLogout}
-                style={{ 
+                style={{
                   borderRadius: '8px',
                   fontWeight: '600',
                   display: 'flex',
@@ -201,9 +201,9 @@ const Dashboard = ({ user }) => {
             style={{ maxWidth: '500px', width: '100%' }}
           >
             <Card className="border-0 shadow-lg" style={{ borderRadius: '20px' }}>
-              <Card.Header 
+              <Card.Header
                 className="border-0 text-white"
-                style={{ 
+                style={{
                   background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                   borderRadius: '20px 20px 0 0',
                   padding: '24px'
@@ -215,10 +215,10 @@ const Dashboard = ({ user }) => {
                 <Form onSubmit={handleProfileSubmit}>
                   <Form.Group className="mb-3">
                     <Form.Label className="fw-semibold">Name</Form.Label>
-                    <Form.Control 
-                      type="text" 
+                    <Form.Control
+                      type="text"
                       name="displayName"
-                      placeholder="Enter your name" 
+                      placeholder="Enter your name"
                       value={profileData.displayName}
                       onChange={handleInputChange}
                       style={{
@@ -231,10 +231,10 @@ const Dashboard = ({ user }) => {
 
                   <Form.Group className="mb-4">
                     <Form.Label className="fw-semibold">Phone Number</Form.Label>
-                    <Form.Control 
-                      type="text" 
+                    <Form.Control
+                      type="text"
                       name="phoneNumber"
-                      placeholder="Enter phone number" 
+                      placeholder="Enter phone number"
                       value={profileData.phoneNumber}
                       onChange={handleInputChange}
                       style={{
@@ -244,10 +244,10 @@ const Dashboard = ({ user }) => {
                       }}
                     />
                   </Form.Group>
-                  
+
                   <div className="d-flex gap-2">
-                    <Button 
-                      variant="primary" 
+                    <Button
+                      variant="primary"
                       type="submit"
                       className="flex-grow-1"
                       style={{
@@ -260,7 +260,7 @@ const Dashboard = ({ user }) => {
                     >
                       Save Changes
                     </Button>
-                    <Button 
+                    <Button
                       variant="outline-secondary"
                       onClick={() => setShowProfile(false)}
                       style={{
@@ -294,8 +294,8 @@ const Dashboard = ({ user }) => {
               borderBottom: '2px solid #e5e7eb'
             }}
           >
-            <Tab 
-              eventKey="home" 
+            <Tab
+              eventKey="home"
               title={
                 <span className="d-flex align-items-center gap-2">
                   <House size={18} />
@@ -333,7 +333,7 @@ const Dashboard = ({ user }) => {
                       <motion.div variants={itemVariants}>
                         <Row className="g-4 justify-content-center">
                           <Col xs={12} sm={6} lg={3}>
-                            <Card 
+                            <Card
                               className="border-0 h-100"
                               style={{
                                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
@@ -353,7 +353,7 @@ const Dashboard = ({ user }) => {
                           </Col>
 
                           <Col xs={12} sm={6} lg={3}>
-                            <Card 
+                            <Card
                               className="border-0 h-100"
                               style={{
                                 background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
@@ -373,7 +373,7 @@ const Dashboard = ({ user }) => {
                           </Col>
 
                           <Col xs={12} sm={6} lg={3}>
-                            <Card 
+                            <Card
                               className="border-0 h-100"
                               style={{
                                 background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
@@ -393,7 +393,7 @@ const Dashboard = ({ user }) => {
                           </Col>
 
                           <Col xs={12} sm={6} lg={3}>
-                            <Card 
+                            <Card
                               className="border-0 h-100"
                               style={{
                                 background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
@@ -419,8 +419,8 @@ const Dashboard = ({ user }) => {
               </motion.div>
             </Tab>
 
-            <Tab 
-              eventKey="ml-projects" 
+            <Tab
+              eventKey="ml-projects"
               title={
                 <span className="d-flex align-items-center gap-2">
                   <Cpu size={18} />
@@ -431,8 +431,8 @@ const Dashboard = ({ user }) => {
               <MLProjectsPage user={user} refreshTriggerFromParent={activeTab === 'ml-projects' ? Date.now() : 0} />
             </Tab>
 
-            <Tab 
-              eventKey="test-model" 
+            <Tab
+              eventKey="test-model"
               title={
                 <span className="d-flex align-items-center gap-2">
                   <ImageIcon size={18} />
@@ -449,8 +449,8 @@ const Dashboard = ({ user }) => {
               </motion.div>
             </Tab>
 
-            <Tab 
-              eventKey="upload-dataset" 
+            <Tab
+              eventKey="upload-dataset"
               title={
                 <span className="d-flex align-items-center gap-2">
                   <CloudUpload size={18} />
@@ -471,8 +471,8 @@ const Dashboard = ({ user }) => {
             </Tab>
 
             {isAdmin && (
-              <Tab 
-                eventKey="admin" 
+              <Tab
+                eventKey="admin"
                 title={
                   <span className="d-flex align-items-center gap-2">
                     <ShieldLock size={18} />
@@ -496,7 +496,7 @@ const Dashboard = ({ user }) => {
       {/* Chat Widget (only on home tab) */}
       {showChat && activeTab === 'home' && (
         <div className="chat-widget">
-          <ChatBot 
+          <ChatBot
             user={user}
             onToggleFullscreen={handleToggleChatFullscreen}
             isFullscreen={isChatFullscreen}

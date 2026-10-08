@@ -7,7 +7,7 @@ load_dotenv()
 
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY", ""))
 
-model = genai.GenerativeModel('gemini-2.5-pro')
+model = genai.GenerativeModel('gemini-3.5-flash')
 
 def generate_from_prompt(prompt: str, context: list[dict], user_name: str = None):
     """

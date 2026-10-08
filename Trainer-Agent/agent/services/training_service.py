@@ -292,13 +292,21 @@ async def execute_training(project_id: str) -> Dict[str, Any]:
         training_start_time = time.time()
         
         try:
+            def epoch_logger(epoch, epochs, train_loss, val_loss, val_acc, epoch_time):
+                db_service.log_agent_activity(
+                    project_id,
+                    f"Epoch {epoch}/{epochs} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.2f}% | Time: {epoch_time:.1f}s",
+                    "info"
+                )
+            
             trainer = ModelTrainer(
                 model=model,
                 data_dir=dataset_extract_dir,
                 num_classes=num_classes,
                 epochs=epochs,
                 lr=learning_rate,
-                batch_size=batch_size
+                batch_size=batch_size,
+                epoch_callback=epoch_logger
             )
             
             # Prepare data loaders
