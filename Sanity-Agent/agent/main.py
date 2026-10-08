@@ -1299,14 +1299,19 @@ async def stop_polling():
     return {"success": True, "message": "Polling stopped"}
 
 
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
-if __name__ == "__main__":
-    import uvicorn
+@app.on_event("startup")
+async def startup_event():
+    global polling_active
     auto_start = os.getenv("AUTO_POLL_ON_START", "true").lower() == "true"
     if auto_start:
         polling_active = True
         poll_thread = threading.Thread(target=poll_pending_projects, daemon=True)
         poll_thread.start()
+        print("[SANITY] Auto-polling background thread started on app startup.")
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+if __name__ == "__main__":
+    import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=AGENT_PORT)

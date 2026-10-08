@@ -1460,7 +1460,7 @@ async def upload_custom_dataset(
         supabase.table("agent_logs").insert({
             "project_id": project_id,
             "agent_name": "dataset",
-            "message": f"Custom dataset processed successfully. Status → pending_training. Classes: {class_labels or 'auto-detect during training'}",
+            "message": f"Custom dataset processed successfully. Status → {target_status}. Classes: {class_labels or 'auto-detect during training'}",
             "log_level": "info",
             "created_at": datetime.now(timezone.utc).isoformat()
         }).execute()

@@ -412,7 +412,7 @@ router.post('/ml/upload-dataset', verifySession, datasetUpload.single('dataset')
       return res.status(400).json({ error: 'No dataset file uploaded' });
     }
 
-    const { project_name, task_type, preferred_model, description } = req.body;
+    const { project_name, task_type, preferred_model, description, run_sanity, run_privacy } = req.body;
 
     if (!project_name || !project_name.trim()) {
       return res.status(400).json({ error: 'Project name is required' });
@@ -435,6 +435,8 @@ router.post('/ml/upload-dataset', verifySession, datasetUpload.single('dataset')
     formData.append('description', description || '');
     formData.append('user_name', userName || '');
     formData.append('user_email', userEmail || '');
+    formData.append('run_sanity', run_sanity || 'false');
+    formData.append('run_privacy', run_privacy || 'false');
 
     const mcpResponse = await axios.post(
       `${MCP_SERVER_URL}/api/ml/upload-dataset`,

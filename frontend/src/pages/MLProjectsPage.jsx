@@ -10,6 +10,7 @@ import SanityReviewPanel from '../components/SanityReviewPanel';
 import PrivacyReviewPanel from '../components/PrivacyReviewPanel';
 import TrainingConfigPanel from '../components/TrainingConfigPanel';
 import JustificationReport from '../components/JustificationReport';
+import AgentDocumentationModal from '../components/AgentDocumentationModal';
 import { downloadModel } from '../services/mlApi';
 import { 
   Download, 
@@ -27,6 +28,7 @@ const MLProjectsPage = ({ user, refreshTriggerFromParent }) => {
   const [selectedProject, setSelectedProject] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [activeTab, setActiveTab] = useState('details');
+  const [docModalAgent, setDocModalAgent] = useState(null);
 
   useEffect(() => {
     if (refreshTriggerFromParent) {
@@ -262,13 +264,11 @@ const MLProjectsPage = ({ user, refreshTriggerFromParent }) => {
               <AgentPipeline 
                 status={selectedProject.status} 
                 onNodeClick={(agentKey) => {
-                  if (agentKey === 'sanity' && selectedProject.status === 'pending_sanity_review') setActiveTab('sanity');
-                  else if (agentKey === 'privacy' && selectedProject.status === 'pending_privacy_review') setActiveTab('privacy');
-                  else if (agentKey === 'training' && selectedProject.status === 'pending_training_config') setActiveTab('config');
-                  else if (agentKey === 'evaluation' && selectedProject.status === 'pending_evaluation_review') setActiveTab('evaluation_review');
-                  else if (agentKey === 'evaluation' && (selectedProject.metadata?.metrics || selectedProject.metadata?.evaluation_metrics)) setActiveTab('metrics');
-                  else if (agentKey === 'planner') setActiveTab('justification');
-                  else setActiveTab('logs');
+                  if (agentKey === 'sanity' && selectedProject.status === 'pending_sanity_review') { setActiveTab('sanity'); return; }
+                  if (agentKey === 'privacy' && selectedProject.status === 'pending_privacy_review') { setActiveTab('privacy'); return; }
+                  if (agentKey === 'training' && selectedProject.status === 'pending_training_config') { setActiveTab('config'); return; }
+                  if (agentKey === 'training' && selectedProject.status === 'training_in_progress') { setActiveTab('logs'); return; }
+                  setDocModalAgent(agentKey);
                 }}
               />
               
@@ -494,6 +494,12 @@ const MLProjectsPage = ({ user, refreshTriggerFromParent }) => {
           }
         }
       `}</style>
+      
+      <AgentDocumentationModal 
+        show={!!docModalAgent} 
+        onHide={() => setDocModalAgent(null)} 
+        agentKey={docModalAgent} 
+      />
     </div>
   );
 };
