@@ -582,16 +582,36 @@ def load_model():
     from torchvision import models
     
     # Load the model architecture
-    model = models.{model_architecture}(weights=None)
-    
-    # Modify final layer for number of classes
-    if hasattr(model, 'fc'):
-        model.fc = nn.Linear(model.fc.in_features, {num_classes})
-    elif hasattr(model, 'classifier'):
-        if isinstance(model.classifier, nn.Sequential):
-            model.classifier[-1] = nn.Linear(model.classifier[-1].in_features, {num_classes})
-        else:
-            model.classifier = nn.Linear(model.classifier.in_features, {num_classes})
+    if "{model_architecture}".lower().startswith("yolo"):
+        try:
+            from ultralytics import YOLO
+            weight_file = "yolov8s-cls.pt" if "s_cls" in "{model_architecture}".lower() else "yolov8n-cls.pt"
+            yolo = YOLO(weight_file)
+            base = yolo.model
+            base.model[-1].linear = nn.Linear(base.model[-1].linear.in_features, {num_classes})
+            class YOLOWrapper(nn.Module):
+                def __init__(self, m):
+                    super().__init__()
+                    self.base_model = m
+                    self.fc = self.base_model.model[-1].linear
+                def forward(self, x):
+                    o = self.base_model(x)
+                    return o[0] if isinstance(o, (tuple, list)) else o
+            model = YOLOWrapper(base)
+        except Exception:
+            from torchvision import models
+            model = models.resnet18(weights=None)
+            model.fc = nn.Linear(model.fc.in_features, {num_classes})
+    else:
+        model = models.{model_architecture}(weights=None)
+        # Modify final layer for number of classes
+        if hasattr(model, 'fc'):
+            model.fc = nn.Linear(model.fc.in_features, {num_classes})
+        elif hasattr(model, 'classifier'):
+            if isinstance(model.classifier, nn.Sequential):
+                model.classifier[-1] = nn.Linear(model.classifier[-1].in_features, {num_classes})
+            else:
+                model.classifier = nn.Linear(model.classifier.in_features, {num_classes})
     
     model.load_state_dict(torch.load('model.pth', map_location='cpu'))
     model.eval()

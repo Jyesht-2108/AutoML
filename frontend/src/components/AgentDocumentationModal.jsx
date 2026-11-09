@@ -15,7 +15,7 @@ const AGENT_DATA = {
     features: [
       'Natural Language Processing (NLP) of user intent via LLMs',
       'Dynamic Pipeline Routing (Images vs. Tabular vs. Text)',
-      'Model Architecture Selection (e.g., ResNet18 vs. EfficientNet-B0 vs. MobileNetV2)',
+      'Model Architecture Selection (e.g., ResNet18 vs. YOLOv8 vs. EfficientNet-B0 vs. MobileNetV2)',
       'Inter-Agent Task Delegation and orchestration',
       'AI Justification generation outlining the exact plan to the user'
     ],
@@ -76,7 +76,7 @@ const AGENT_DATA = {
       'Hyperparameter tuning, Learning Rate scheduling, and Dropout configuration',
       'Early stopping mechanisms to prevent model overfitting'
     ],
-    technical: 'Employs AdamW optimizers, Cross-Entropy Loss functions, and native GPU-accelerated tensor computations via PyTorch 2.0. Supports dynamic architectures like ResNet, EfficientNet, and MobileNet.'
+    technical: 'Employs AdamW optimizers, Cross-Entropy Loss functions, and native GPU-accelerated tensor computations via PyTorch 2.0. Supports dynamic architectures like ResNet, YOLOv8, EfficientNet, and MobileNet.'
   },
   evaluation: {
     title: 'Evaluation Agent',

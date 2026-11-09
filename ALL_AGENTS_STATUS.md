@@ -1,38 +1,67 @@
 # All Agents Status & Quick Reference
 
+> 📖 **Full System Architecture & Technical Manual:** For an exhaustive, in-depth technical manual covering every agent, internal services, data contracts, and multimodal flows, see [PROJECT_ARCHITECTURE_AND_SYSTEM_GUIDE.md](file:///c:/Users/Dell/AutoML/PROJECT_ARCHITECTURE_AND_SYSTEM_GUIDE.md).
+
 ## Agent Overview
 
-| Agent | Port | Status | Auto-Polling | Purpose |
-|-------|------|--------|--------------|---------|
-| **Backend** | 4000 | ✅ Ready | N/A | API Gateway, Authentication |
-| **Frontend** | 5173 | ✅ Ready | Auto-refresh (5s) | User Interface |
-| **MCP Server** | 8000 | ✅ Ready | N/A | Agent Orchestration |
-| **Planner Agent** | 8001 | ✅ Ready | No | Parse user intent, create projects |
-| **Dataset Agent** | 8002 | ✅ Ready | Yes (10s) | Search & download datasets |
-| **Training Agent** | 8003 | ✅ Ready | Yes (10s) | Train & evaluate models |
+| Agent / Service | Port | Status | Auto-Polling | Purpose |
+|-----------------|------|--------|--------------|---------|
+| **Backend** | 4000 | ✅ Ready | N/A | API Gateway, Firebase Cookie Session Auth |
+| **Frontend** | 5173 | ✅ Ready | Auto-refresh (5s) | React 18 UI, HITL Panels, Model Tester |
+| **MCP Server** | 8000 | ✅ Ready | N/A | Inter-Agent Orchestration, Gemini XAI Insights |
+| **Planner Agent** | 8001 | ✅ Ready | No | LLM Intent Parser (Gemini 3.5 Flash) |
+| **Dataset Agent** | 8002 | ✅ Ready | Yes (10s) | Kaggle Harvester, Unzipper, Auto-Stratifier |
+| **Data Sanity Agent**| 8004 | ✅ Ready | Yes (10s) | Phase A Audit & Phase B Auto-Fix Engine |
+| **Privacy Agent** | 8005 | ✅ Ready | Yes (10s) | Face & PII Discovery and Redaction Engine |
+| **Trainer Agent** | 8003 | ✅ Ready | Yes (10s) | PyTorch / Scikit-learn / XGBoost Compute |
+| **Evaluation Agent**| (in 8003)| ✅ Ready | Triggered | Metrics Calculator, Grad-CAM XAI Generator |
+| **Deployment Agent**| 8007 | ✅ Ready | Yes (5s) | Production FastAPI & Docker Microservice Packager |
 
-## Status Flow
+## Complete Status Flow
 
 ```
-User Message
+User Message or Dataset Upload
     ↓
 Planner Agent (8001)
     ↓ Creates project
     status: pending_dataset
     ↓
 Dataset Agent (8002) [Auto-polls every 10s]
-    ↓ Downloads dataset
+    ↓ Downloads & normalizes dataset
+    status: pending_sanity
+    ↓
+Data Sanity Agent (8004) [Phase A Audit]
+    ↓ Detects corrupt/blurry/imbalance
+    status: pending_sanity_review [HITL Checkpoint 1]
+    ↓ User approves fixes (status: pending_sanity_fix)
+    ↓ Sanity Agent applies auto-fixes & re-uploads
+    status: pending_privacy
+    ↓
+Privacy Agent (8005) [Phase A Audit]
+    ↓ Scans for faces / PII
+    status: pending_privacy_review [HITL Checkpoint 2]
+    ↓ User approves redactions (status: pending_privacy_fix)
+    ↓ Privacy Agent masks faces / redacts tokens
+    status: pending_training_config [HITL Checkpoint 3]
+    ↓
+User submits hyperparameters (Epochs, LR, Arch, Batch Size)
     status: pending_training
     ↓
 Training Agent (8003) [Auto-polls every 10s]
-    ↓ Trains model
+    ↓ Trains PyTorch/XGBoost/Scikit-learn model
     status: pending_evaluation
     ↓
-Training Agent (8003) [Auto-polls every 10s]
-    ↓ Evaluates model
+Evaluation Agent (in 8003)
+    ↓ Calculates metrics, confusion matrix & Grad-CAM XAI
+    status: pending_evaluation_review [HITL Checkpoint 4]
+    ↓ User can "Adjust & Retrain" or "Deploy Model"
+    status: pending_deployment
+    ↓
+Deployment Agent (8007) [Auto-polls every 5s]
+    ↓ Synthesizes Dockerfile, requirements.txt, app.py
     status: completed
     ↓
-User downloads bundle
+User downloads production bundle or tests live in UI Sandbox
 ```
 
 ## Quick Start Commands

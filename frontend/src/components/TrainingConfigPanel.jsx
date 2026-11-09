@@ -33,7 +33,9 @@ const TrainingConfigPanel = ({ project, onConfigSaved }) => {
       { value: 'resnet34', label: 'ResNet-34 (Balanced)' },
       { value: 'resnet50', label: 'ResNet-50 (High Accuracy, Slower)' },
       { value: 'mobilenet_v2', label: 'MobileNet V2 (Lightweight, Mobile)' },
-      { value: 'efficientnet_b0', label: 'EfficientNet-B0 (Modern, Efficient)' }
+      { value: 'efficientnet_b0', label: 'EfficientNet-B0 (Modern, Efficient)' },
+      { value: 'yolov8n_cls', label: 'YOLOv8 Nano (SOTA Real-time Edge Vision)' },
+      { value: 'yolov8s_cls', label: 'YOLOv8 Small (High Accuracy Edge Vision)' }
     ];
   } else if (taskType.startsWith('tabular')) {
     SUPPORTED_MODELS = [
