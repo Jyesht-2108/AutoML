@@ -136,7 +136,7 @@ Rules:
   - text_classification -> "pytorch"
 
 - **PREFERRED MODEL:**
-  - image_classification: "resnet18", "resnet50", or "efficientnet_b0"
+  - image_classification: "resnet18", "resnet50", "mobilenet_v2", "efficientnet_b0", or "yolov8n_cls" (use "yolov8n_cls" if user mentions YOLO, YOLOv8, real-time edge vision, or fast classification)
   - tabular_classification: "random_forest", "xgboost", or "gradient_boosting"
   - tabular_regression: "random_forest", "xgboost", or "gradient_boosting"
   - text_classification: "distilbert", "roberta", or "tfidf_svm"
@@ -176,6 +176,10 @@ Response: {{"name": "Movie Sentiment Analyzer", "task_type": "text_classificatio
 Example 5 (Image with explicit dataset):
 User: "Train an image classification ML model to classify Dogs and Cats under 300 MB"
 Response: {{"name": "Dogs and Cats Classifier", "task_type": "image_classification", "framework": "pytorch", "dataset_source": "kaggle", "search_keywords": ["dogs cats classifier", "cats vs dogs"], "preferred_model": "resnet18", "target_metric": "accuracy", "target_value": 0.9, "max_dataset_size_gb": 0.3}}
+
+Example 6 (Image classification with YOLO):
+User: "Train a YOLOv8 model to classify sports vehicles"
+Response: {{"name": "Sports Vehicle Classifier", "task_type": "image_classification", "framework": "pytorch", "dataset_source": "kaggle", "search_keywords": ["sports vehicles classification", "sports cars"], "preferred_model": "yolov8n_cls", "target_metric": "accuracy", "target_value": 0.9, "max_dataset_size_gb": 50}}
 
 Now process this user request and respond with ONLY the JSON:
 """

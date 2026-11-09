@@ -268,7 +268,14 @@ async def execute_training(project_id: str) -> Dict[str, Any]:
             _model_aliases = {
                 "efficientnet": "efficientnet_b0",
                 "mobilenet": "mobilenet_v2",
-                "resnet": "resnet18"
+                "resnet": "resnet18",
+                "yolo": "yolov8n_cls",
+                "yolov8": "yolov8n_cls",
+                "yolov8n": "yolov8n_cls",
+                "yolov8_cls": "yolov8n_cls",
+                "yolov8s": "yolov8s_cls",
+                "yolo-cls": "yolov8n_cls",
+                "yolov8-cls": "yolov8n_cls"
             }
             preferred_model = _model_aliases.get(preferred_model.lower(), preferred_model.lower())
             db_service.log_agent_activity(

@@ -739,7 +739,14 @@ async def test_model(project_id: str, user_id: str = Form(...), file: UploadFile
         model_aliases = {
             "efficientnet": "efficientnet_b0",
             "mobilenet": "mobilenet_v2",
-            "resnet": "resnet18"
+            "resnet": "resnet18",
+            "yolo": "yolov8n_cls",
+            "yolov8": "yolov8n_cls",
+            "yolov8n": "yolov8n_cls",
+            "yolov8_cls": "yolov8n_cls",
+            "yolov8s": "yolov8s_cls",
+            "yolo-cls": "yolov8n_cls",
+            "yolov8-cls": "yolov8n_cls"
         }
         model_architecture = model_aliases.get(model_architecture.lower(), model_architecture.lower())
         
@@ -795,6 +802,11 @@ async def test_model(project_id: str, user_id: str = Form(...), file: UploadFile
                 detected_architecture = "resnet18"
         elif any(k.startswith("features.") for k in state_dict_keys):
             detected_architecture = "mobilenet_v2"
+        elif any("c2f" in k.lower() or "model.9" in k or "model.8" in k or "classify" in k.lower() for k in state_dict_keys):
+            if "s_cls" in model_architecture or "yolov8s" in model_architecture:
+                detected_architecture = "yolov8s_cls"
+            else:
+                detected_architecture = "yolov8n_cls"
         
         if detected_architecture and detected_architecture != model_architecture:
             logger.warning(
@@ -812,6 +824,12 @@ async def test_model(project_id: str, user_id: str = Form(...), file: UploadFile
         elif "classifier.1.weight" in state_dict:
             # EfficientNet / MobileNet: classifier[1] layer
             detected_num_classes = state_dict["classifier.1.weight"].shape[0]
+        elif any(k.endswith("linear.weight") for k in state_dict_keys):
+            # YOLO: linear weight in classify head
+            for k in state_dict_keys:
+                if k.endswith("linear.weight"):
+                    detected_num_classes = state_dict[k].shape[0]
+                    break
         
         if detected_num_classes and detected_num_classes != num_classes:
             logger.warning(
@@ -837,6 +855,26 @@ async def test_model(project_id: str, user_id: str = Form(...), file: UploadFile
         elif model_architecture == "efficientnet_b0":
             model = models.efficientnet_b0(weights=None)
             model.classifier[1] = nn.Linear(model.classifier[1].in_features, num_classes)
+        elif model_architecture in ("yolov8n_cls", "yolov8s_cls"):
+            weight_file = "yolov8s-cls.pt" if model_architecture == "yolov8s_cls" else "yolov8n-cls.pt"
+            try:
+                from ultralytics import YOLO
+                yolo = YOLO(weight_file)
+                base = yolo.model
+                base.model[-1].linear = nn.Linear(base.model[-1].linear.in_features, num_classes)
+                class YOLOWrapper(nn.Module):
+                    def __init__(self, m):
+                        super().__init__()
+                        self.base_model = m
+                        self.fc = self.base_model.model[-1].linear
+                    def forward(self, x):
+                        o = self.base_model(x)
+                        return o[0] if isinstance(o, (tuple, list)) else o
+                model = YOLOWrapper(base)
+            except Exception as e:
+                logger.warning(f"Could not load YOLO via ultralytics: {e}, falling back to resnet18")
+                model = models.resnet18(weights=None)
+                model.fc = nn.Linear(model.fc.in_features, num_classes)
         else:
             raise HTTPException(status_code=400, detail=f"Unsupported model architecture: {model_architecture}")
         

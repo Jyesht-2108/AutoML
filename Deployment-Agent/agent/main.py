@@ -116,13 +116,16 @@ CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
 """
 
 
-def generate_requirements() -> str:
-    return """fastapi>=0.100.0
+def generate_requirements(model_architecture: str = "resnet18") -> str:
+    extra_reqs = ""
+    if model_architecture.lower().startswith("yolo"):
+        extra_reqs = "\nultralytics>=8.0.0"
+    return f"""fastapi>=0.100.0
 uvicorn[standard]>=0.23.0
 python-multipart>=0.0.6
 torch>=2.0.0 --index-url https://download.pytorch.org/whl/cpu
 torchvision>=0.15.0 --index-url https://download.pytorch.org/whl/cpu
-pillow>=10.0.0
+pillow>=10.0.0{extra_reqs}
 """
 
 
@@ -169,6 +172,25 @@ def load_model():
     elif MODEL_ARCHITECTURE == "mobilenet_v2":
         model = models.mobilenet_v2(weights=None)
         model.classifier[1] = nn.Linear(model.classifier[1].in_features, NUM_CLASSES)
+    elif MODEL_ARCHITECTURE.startswith("yolo"):
+        try:
+            from ultralytics import YOLO
+            weight_file = "yolov8s-cls.pt" if "s_cls" in MODEL_ARCHITECTURE else "yolov8n-cls.pt"
+            yolo = YOLO(weight_file)
+            base = yolo.model
+            base.model[-1].linear = nn.Linear(base.model[-1].linear.in_features, NUM_CLASSES)
+            class YOLOWrapper(nn.Module):
+                def __init__(self, m):
+                    super().__init__()
+                    self.base_model = m
+                    self.fc = self.base_model.model[-1].linear
+                def forward(self, x):
+                    o = self.base_model(x)
+                    return o[0] if isinstance(o, (tuple, list)) else o
+            model = YOLOWrapper(base)
+        except Exception:
+            model = models.resnet18(weights=None)
+            model.fc = nn.Linear(model.fc.in_features, NUM_CLASSES)
     else:
         model = models.resnet18(weights=None)
         model.fc = nn.Linear(model.fc.in_features, NUM_CLASSES)
@@ -367,7 +389,14 @@ def process_pending_deployment(project_id: str):
         model_aliases = {
             "efficientnet": "efficientnet_b0",
             "mobilenet": "mobilenet_v2",
-            "resnet": "resnet18"
+            "resnet": "resnet18",
+            "yolo": "yolov8n_cls",
+            "yolov8": "yolov8n_cls",
+            "yolov8n": "yolov8n_cls",
+            "yolov8_cls": "yolov8n_cls",
+            "yolov8s": "yolov8s_cls",
+            "yolo-cls": "yolov8n_cls",
+            "yolov8-cls": "yolov8n_cls"
         }
         model_architecture = model_aliases.get(model_architecture.lower(), model_architecture.lower())
         
@@ -405,7 +434,7 @@ def process_pending_deployment(project_id: str):
             else:
                 # Image classification (original)
                 dockerfile_content = generate_dockerfile()
-                requirements_content = generate_requirements()
+                requirements_content = generate_requirements(model_architecture)
                 app_content = generate_app_py(model_architecture, num_classes, class_labels)
             
             docker_compose_content = generate_docker_compose(project_name)

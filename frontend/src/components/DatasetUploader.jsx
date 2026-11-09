@@ -579,6 +579,8 @@ const DatasetUploader = ({ user, onProjectCreated }) => {
                                 <option value="resnet50">ResNet-50 (Accurate)</option>
                                 <option value="mobilenet_v2">MobileNet V2 (Lightweight)</option>
                                 <option value="efficientnet_b0">EfficientNet-B0 (Efficient)</option>
+                                <option value="yolov8n_cls">YOLOv8 Nano (SOTA Real-time Vision)</option>
+                                <option value="yolov8s_cls">YOLOv8 Small (High Accuracy Vision)</option>
                               </>
                             )}
                             {taskType.startsWith('tabular') && (
